@@ -1,0 +1,29 @@
+# Progress (Updated: 2026-04-11)
+
+## Done
+
+- Added templates/journal-profiles.yaml as the machine-readable journal registry.
+- Implemented infrastructure journal registry loading and PromptEngine journal requirement injection.
+- Extended plan_figure and generate_figure to accept target_journal and automatically apply journal constraints.
+- Added tests for prompt-engine journal resolution, plan payload propagation, and generation prompt injection.
+- Validated changes with Ruff and pytest (14 passed).
+- Recorded the next six requested product capabilities in Memory Bank for future planning and implementation.
+- Added root ROADMAP.md to formalize capability sequencing and delivery themes.
+- Added root CHANGELOG.md to track notable repo changes in a durable project document.
+- Updated README.md to expose roadmap, changelog, and other key project documents.
+- Added a cross-platform local launcher and replaced PowerShell-only static MCP startup guidance with shell-neutral `uv --project` launch instructions.
+- Converged the legacy PMID input path in generate_figure onto an internal plan-first bridge so generation always runs from planned_payload.
+- Synced the VS Code extension vector icon with the newer PNG brand asset.
+
+## Doing
+
+- Maintaining the current generic renderer plus journal-registry baseline while prioritizing the next roadmap capabilities around posters, grouped figures, composites, prompt retention, and style reuse.
+
+## Next
+
+- Support poster generation as a first-class output mode.
+- Support grouped multi-panel figure generation.
+- Support montage/composite assembly, such as turning four images into one larger figure.
+- Support retargeting one existing image to different journal requirements without rebuilding the concept from scratch.
+- Persist prompts and prompt packs so assets can be reproduced later.
+- Extract reusable style prompts from an existing image so the style can be applied again.
