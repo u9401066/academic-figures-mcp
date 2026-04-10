@@ -129,3 +129,58 @@ python -m src.server
 ## License
 
 MIT
+
+## Composite Engine (Multi-Panel Layout)
+
+The `composite` module solves Gemini's weakness with multi-panel figures.
+Instead of generating a single image with all panels (which often fails on
+spatial layout, numbering, and mixed styles), it:
+
+1. **Generates each panel independently** with focused prompts
+2. **Composites them using Pillow** with precise pixel-level layout
+3. **Programmatic text overlay** — 100% accurate labels, no misspellings
+
+### Usage
+
+```python
+from src.composite import CompositeFigure, PanelSpec
+from src.server import generate_figure
+
+# Step 1: Generate panels separately
+left = generate_figure(pmid="41657234", figure_type="anatomy")
+right = generate_figure(pmid="41657234", figure_type="ultrasound")
+
+# Step 2: Composite
+comp = CompositeFigure()
+comp.add_panel(
+    PanelSpec(prompt="...", label="A", panel_type="anatomy"),
+    left["image_path"]
+)
+comp.add_panel(
+    PanelSpec(prompt="...", label="B", panel_type="ultrasound"),
+    right["image_path"]
+)
+comp.set_title("Interscalene Brachial Plexus Block")
+comp.set_citation("PMID 41657234 · Regional Anesthesia")
+comp.compose("interscalene_block.pdf")
+```
+
+### MCP Tool: `composite_figure`
+
+```
+composite_figure(
+    panels=[["left.png", "anatomy"], ["right.png", "ultrasound"]],
+    labels=["A", "B"],
+    title="..."
+)
+```
+
+### Layout Specs
+
+| Property | Value |
+|----------|-------|
+| Canvas | 2400 × 1600 px (8" × 5.33" @ 300 DPI) |
+| Format | Double column (~183mm width, Nature standard) |
+| Labels | A/B/C with pill-shaped background |
+| Footer | Caption + PMIDs + citation |
+| Divider | Vertical line between panels |

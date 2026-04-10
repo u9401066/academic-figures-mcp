@@ -168,6 +168,54 @@ def batch_generate(
         "results": results,
     }
 
+@mcp.tool()
+def composite_figure(
+    panels: list[list[str]],
+    labels: list[str],
+    title: str,
+    caption: str = "",
+    citation: str = "",
+    output_path: Optional[str] = None,
+) -> dict:
+    """Composite multiple panel images into a publication-ready figure.
+
+    Takes individually generated panel images and composites them with:
+    - Nature/Lancet compliant layout (8" × 5.3" @ 300 DPI)
+    - Auto-placed panel labels (A, B, C...)
+    - Orientation markers, title, footer with citation
+    - Precise pixel-level layout control
+
+    Args:
+        panels: List of [image_path_str, panel_type_str] e.g. [["/path/to/panel.png", "anatomy"]]
+        labels: Panel labels e.g. ["A", "B", "C"]
+        title: Figure title
+        caption: Optional caption text
+        citation: Optional citation (e.g. "PMID 12345 · NYSORA")
+        output_path: Where to save (default: ./composite_figure.png)
+
+    Returns:
+        {"status": "success", "output_path": "...", "dimensions": {"w":..., "h":..., "dpi": 300}}
+    """
+    from src.composite import CompositeFigure, PanelSpec
+
+    if len(panels) != len(labels):
+        return {"status": "error", "error": "panels and labels must be same length"}
+
+    comp = CompositeFigure()
+    for i, (img_path, ptype) in enumerate(panels):
+        comp.add_panel(PanelSpec(
+            prompt="composite panel",
+            label=labels[i],
+            panel_type=ptype,
+        ), img_path)
+
+    comp.set_title(title)
+    comp.set_caption(caption)
+    comp.set_citation(citation)
+
+    return comp.compose(output_path)
+
+
 # ─── Entry Point ─────────────────────────────────────────────
 
 def main():
