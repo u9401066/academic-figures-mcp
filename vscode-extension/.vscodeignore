@@ -1,0 +1,9 @@
+src/**
+tsconfig.json
+.vscode/**
+eslint.config.mjs
+node_modules/**/.bin/**
+node_modules/typescript/**
+node_modules/@types/**
+node_modules/eslint/**
+node_modules/@typescript-eslint/**

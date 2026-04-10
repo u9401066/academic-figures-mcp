@@ -1,0 +1,103 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="14" y1="10" x2="111" y2="119" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#21385B"/>
+      <stop offset="1" stop-color="#162A46"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="25" y1="24" x2="103" y2="100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8BE5D4"/>
+      <stop offset="1" stop-color="#46B9B2"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="31" y1="31" x2="93" y2="97" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD26B"/>
+      <stop offset="1" stop-color="#F2A636"/>
+    </linearGradient>
+    <linearGradient id="paperShell" x1="39" y1="33" x2="87" y2="93" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF7E8"/>
+      <stop offset="1" stop-color="#F2E3C9"/>
+    </linearGradient>
+    <linearGradient id="paperCore" x1="42" y1="37" x2="84" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFDF8"/>
+      <stop offset="1" stop-color="#FAF3E6"/>
+    </linearGradient>
+    <filter id="cardShadow" x="28" y="24" width="72" height="80" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="4"/>
+      <feGaussianBlur stdDeviation="4"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.0313725 0 0 0 0 0.101961 0 0 0 0 0.184314 0 0 0 0.28 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    </filter>
+    <marker id="arrowTeal" markerWidth="7" markerHeight="7" refX="6.2" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0L7 3.5L0 7L2 3.5Z" fill="#67D7C7"/>
+    </marker>
+    <marker id="arrowAmber" markerWidth="7" markerHeight="7" refX="6.2" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0L7 3.5L0 7L2 3.5Z" fill="#F2AF3F"/>
+    </marker>
+  </defs>
+  <rect x="6" y="7" width="116" height="114" rx="26" fill="url(#bg)"/>
+  <rect x="13" y="14" width="102" height="100" rx="22" stroke="#D7F3EC" stroke-opacity="0.08" stroke-width="2"/>
+
+  <g opacity="0.96">
+    <path d="M40 31C47 25 56 20 64 19" stroke="url(#teal)" stroke-width="5.5" stroke-linecap="round" marker-end="url(#arrowTeal)"/>
+    <path d="M71 19C81 19.5 91 24 99 31" stroke="url(#teal)" stroke-width="5.5" stroke-linecap="round" marker-end="url(#arrowTeal)"/>
+    <path d="M104 38C109 47 111 58 109 70" stroke="url(#teal)" stroke-width="5.5" stroke-linecap="round" marker-end="url(#arrowTeal)"/>
+    <path d="M97 97C88 104 76 108 64 108" stroke="url(#teal)" stroke-width="5.5" stroke-linecap="round" marker-end="url(#arrowTeal)"/>
+    <path d="M28 71C18 63 18 48 28 40" stroke="url(#teal)" stroke-width="5.5" stroke-linecap="round" marker-end="url(#arrowTeal)"/>
+    <path d="M27 78C31 88 39 96 50 102" stroke="url(#teal)" stroke-width="5.5" stroke-linecap="round" marker-end="url(#arrowTeal)"/>
+
+    <path d="M71 29C81 30 89 34 95 41" stroke="url(#amber)" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowAmber)"/>
+    <path d="M95 41C96.5 49 95 56 89 62" stroke="url(#amber)" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowAmber)"/>
+    <path d="M39 68C36 77 36 84 40 93" stroke="url(#amber)" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowAmber)"/>
+    <path d="M71 96C78 96 85 94 92 89" stroke="url(#amber)" stroke-width="5" stroke-linecap="round" marker-end="url(#arrowAmber)"/>
+  </g>
+
+  <circle cx="64" cy="20" r="3.8" fill="#F8ECD4"/>
+  <circle cx="91.5" cy="32.5" r="3.8" fill="#F8ECD4"/>
+  <circle cx="104.5" cy="64" r="3.8" fill="#F8ECD4"/>
+  <circle cx="64" cy="103.5" r="3.8" fill="#F8ECD4"/>
+  <circle cx="24" cy="64" r="3.8" fill="#F8ECD4"/>
+  <circle cx="35.5" cy="32.5" r="3.8" fill="#F8ECD4"/>
+  <circle cx="88" cy="95.5" r="3.8" fill="#F8ECD4"/>
+
+  <path d="M64 27V35" stroke="#6FD8C8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M32 64H40" stroke="#6FD8C8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M89 64H97" stroke="#F0AF42" stroke-width="3" stroke-linecap="round"/>
+  <path d="M64 92V100" stroke="#F0AF42" stroke-width="3" stroke-linecap="round"/>
+
+  <g filter="url(#cardShadow)">
+    <rect x="34" y="30" width="60" height="66" rx="8" fill="url(#paperShell)"/>
+    <rect x="38" y="35" width="52" height="56" rx="5.5" fill="url(#paperCore)"/>
+    <rect x="44" y="42" width="17.5" height="14.5" rx="2.6" fill="#243B5D"/>
+    <rect x="46.5" y="49.5" width="2.8" height="5" rx="1.2" fill="#F0B247"/>
+    <rect x="51.3" y="45.8" width="2.8" height="8.7" rx="1.2" fill="#F0B247"/>
+    <rect x="56.1" y="47.7" width="2.8" height="6.8" rx="1.2" fill="#5ED0BE"/>
+    <rect x="60.9" y="43.2" width="2.8" height="11.3" rx="1.2" fill="#7DE0D0"/>
+
+    <circle cx="73" cy="49.3" r="8.6" fill="#EFF7F5" stroke="#263B5C" stroke-width="1.8"/>
+    <path d="M73 49.3V40.7C76.8 40.7 79.8 41.8 82 44.4L73 49.3Z" fill="#F2B54A"/>
+    <path d="M73 49.3H81.1C80.7 53 78.8 55.8 75.8 57.4L73 49.3Z" fill="#4ABFB7"/>
+    <path d="M73 49.3L67.1 56.1C63.8 53.2 62.8 48.3 64.9 44.2L73 49.3Z" fill="#7CE0D2"/>
+
+    <rect x="44" y="59.6" width="17.5" height="12.3" rx="2.6" fill="#E4D8C1"/>
+    <path d="M46.6 68.2L50.6 64.1L54.2 67.4L59 62.3" stroke="#29415F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="46.6" cy="68.2" r="1.5" fill="#29415F"/>
+    <circle cx="50.6" cy="64.1" r="1.5" fill="#29415F"/>
+    <circle cx="54.2" cy="67.4" r="1.5" fill="#29415F"/>
+    <circle cx="59" cy="62.3" r="1.5" fill="#29415F"/>
+
+    <rect x="64.5" y="59.6" width="17.5" height="12.3" rx="2.6" fill="#253C5D"/>
+    <rect x="67.3" y="63.1" width="11.2" height="1.8" rx="0.9" fill="#F0B247"/>
+    <rect x="67.3" y="66.4" width="9.8" height="1.8" rx="0.9" fill="#78DDD0"/>
+    <rect x="67.3" y="69.7" width="8.7" height="1.8" rx="0.9" fill="#5ACFC0"/>
+
+    <rect x="44.5" y="77.5" width="18.2" height="1.8" rx="0.9" fill="#DDD0B7"/>
+    <rect x="44.5" y="81" width="18.2" height="1.8" rx="0.9" fill="#DDD0B7"/>
+    <rect x="44.5" y="84.5" width="16" height="1.8" rx="0.9" fill="#DDD0B7"/>
+    <rect x="64.5" y="76.8" width="17.8" height="2.2" rx="1.1" fill="#274160"/>
+    <rect x="64.5" y="80.9" width="17.8" height="2.2" rx="1.1" fill="#274160"/>
+    <rect x="64.5" y="85" width="13.2" height="2.2" rx="1.1" fill="#274160"/>
+  </g>
+</svg>

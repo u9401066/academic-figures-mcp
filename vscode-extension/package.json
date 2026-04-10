@@ -1,0 +1,313 @@
+{
+  "name": "academic-figures-mcp",
+  "displayName": "Academic Figures MCP",
+  "description": "A workflow-first academic figure agent harness for multi-step planning, generation, and evaluation through MCP and VSX, with guided onboarding for non-engineers.",
+  "version": "0.3.0",
+  "publisher": "u9401066",
+  "license": "Apache-2.0",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/u9401066/academic-figures-mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/u9401066/academic-figures-mcp/issues"
+  },
+  "homepage": "https://github.com/u9401066/academic-figures-mcp#readme",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Data Science"
+  ],
+  "keywords": [
+    "mcp",
+    "model context protocol",
+    "academic",
+    "figures",
+    "pubmed",
+    "gemini",
+    "copilot",
+    "scientific illustration"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "academicFiguresMcp.planFigureFromPmid",
+        "title": "Academic Figures: Plan Figure from PMID",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.generateFigure",
+        "title": "Academic Figures: Generate Figure",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.transformFigureStyle",
+        "title": "Academic Figures: Transform Figure Style",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.evaluateFigure",
+        "title": "Academic Figures: Evaluate Figure",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.browsePresets",
+        "title": "Academic Figures: Browse Presets",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.browseKnowledgeAssets",
+        "title": "Academic Figures: Browse Knowledge Assets",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.configureApiKey",
+        "title": "Academic Figures: Configure Connection",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.createEnvironmentFile",
+        "title": "Academic Figures: Create Environment File",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.insertMcpSettings",
+        "title": "Academic Figures: Insert MCP Settings",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.openRecentJobs",
+        "title": "Academic Figures: Open Recent Jobs",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.refreshViews",
+        "title": "Academic Figures: Refresh Views",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.showStatus",
+        "title": "Academic Figures: Show Status",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.showOutput",
+        "title": "Academic Figures: Show Output",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.showQuickMenu",
+        "title": "Academic Figures: Quick Menu",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.setupWizard",
+        "title": "Academic Figures: Setup Wizard (One-Click Setup)",
+        "category": "Academic Figures",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "academicFiguresMcp.reinstallPythonEnv",
+        "title": "Academic Figures: Reinstall Python Environment",
+        "category": "Academic Figures"
+      }
+    ],
+    "configuration": {
+      "title": "Academic Figures MCP",
+      "properties": {
+        "academicFiguresMcp.transport": {
+          "type": "string",
+          "default": "stdio",
+          "enum": [
+            "stdio",
+            "streamable-http"
+          ],
+          "description": "Preferred MCP transport when launching the Academic Figures server."
+        },
+        "academicFiguresMcp.imageProvider": {
+          "type": "string",
+          "default": "google",
+          "enum": [
+            "google",
+            "openrouter",
+            "ollama"
+          ],
+          "description": "Backend provider used for figure generation or local SVG rendering."
+        },
+        "academicFiguresMcp.credentialSource": {
+          "type": "string",
+          "default": "secretStorage",
+          "enum": [
+            "secretStorage",
+            "envFile",
+            "processEnv"
+          ],
+          "description": "Where the extension should read provider credentials from when launching the Academic Figures MCP server."
+        },
+        "academicFiguresMcp.environmentFile": {
+          "type": "string",
+          "default": ".vscode/academic-figures.env",
+          "description": "Workspace-relative or absolute env file path used when credentialSource=envFile."
+        },
+        "academicFiguresMcp.googleModel": {
+          "type": "string",
+          "default": "gemini-3.1-flash-image-preview",
+          "description": "Model name used for direct Google Gemini image generation."
+        },
+        "academicFiguresMcp.openRouterModel": {
+          "type": "string",
+          "default": "google/gemini-3.1-flash-image-preview",
+          "description": "OpenRouter model ID for Gemini image generation."
+        },
+        "academicFiguresMcp.openRouterBaseUrl": {
+          "type": "string",
+          "default": "https://openrouter.ai/api/v1",
+          "description": "Base URL for OpenRouter's OpenAI-compatible API."
+        },
+        "academicFiguresMcp.openRouterReferer": {
+          "type": "string",
+          "default": "https://github.com/u9401066/academic-figures-mcp",
+          "description": "Optional HTTP-Referer header sent to OpenRouter."
+        },
+        "academicFiguresMcp.openRouterTitle": {
+          "type": "string",
+          "default": "Academic Figures MCP",
+          "description": "Optional X-OpenRouter-Title header sent to OpenRouter."
+        },
+        "academicFiguresMcp.ollamaBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434/v1",
+          "description": "Ollama or OpenAI-compatible base URL used for local SVG brief generation and vision-based evaluation."
+        },
+        "academicFiguresMcp.ollamaModel": {
+          "type": "string",
+          "default": "llava:latest",
+          "description": "Ollama model used for local SVG brief generation and vision-based evaluation."
+        },
+        "academicFiguresMcp.outputDir": {
+          "type": "string",
+          "default": ".academic-figures",
+          "description": "Workspace-local artifact directory used by the extension."
+        },
+        "academicFiguresMcp.preferLocalSource": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prefer the current workspace source tree over uvx package execution when both are available."
+        },
+        "academicFiguresMcp.pythonCommand": {
+          "type": "string",
+          "default": "python",
+          "description": "Python executable used with uv run in local development mode."
+        },
+        "academicFiguresMcp.packageName": {
+          "type": "string",
+          "default": "academic-figures-mcp",
+          "description": "Package name used when launching through uvx in package mode."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "academicFigures",
+          "title": "Academic Figures",
+          "icon": "resources/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "academicFigures": [
+        {
+          "id": "academicFigures.presets",
+          "name": "Presets",
+          "icon": "resources/icon.png"
+        },
+        {
+          "id": "academicFigures.resources",
+          "name": "Resources",
+          "icon": "resources/icon.png"
+        },
+        {
+          "id": "academicFigures.jobs",
+          "name": "Jobs",
+          "icon": "resources/icon.png"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "academicFiguresMcp.refreshViews",
+          "when": "view =~ /^academicFigures\\./",
+          "group": "navigation"
+        }
+      ]
+    },
+    "walkthroughs": [
+      {
+        "id": "academicFigures.getStarted",
+        "title": "Get Started with Academic Figures MCP",
+        "description": "Generate publication-ready scientific figures from PubMed papers with just ONE click!",
+        "steps": [
+          {
+            "id": "apiKey",
+            "title": "Configure Connection",
+            "description": "Choose SecretStorage, an env file path, or process env for Google or OpenRouter. You can also store OpenRouter and Ollama endpoint settings from the same menu.\n\n[Configure Connection](command:academicFiguresMcp.configureApiKey)\n\n[Create Env File](command:academicFiguresMcp.createEnvironmentFile)\n\n[Get Google API Key](https://aistudio.google.com/apikey)\n\n[OpenRouter Keys](https://openrouter.ai/keys)",
+            "media": {
+              "markdown": "resources/walkthrough/api-key.md"
+            },
+            "completionEvents": [
+              "onContext:academicFiguresMcp.anyApiKeyConfigured"
+            ]
+          },
+          {
+            "id": "mcpSettings",
+            "title": "Insert MCP Settings",
+            "description": "Add the MCP server config to your workspace.\n\n[Insert MCP Settings](command:academicFiguresMcp.insertMcpSettings)",
+            "media": {
+              "markdown": "resources/walkthrough/mcp-settings.md"
+            },
+            "completionEvents": [
+              "onCommand:academicFiguresMcp.insertMcpSettings"
+            ]
+          },
+          {
+            "id": "generate",
+            "title": "Generate Your First Figure",
+            "description": "Try asking GitHub Copilot:\n\n- \"Generate a figure for PMID 41657234\"\n- \"Create a drug mechanism diagram\"\n\n[Open Copilot Chat](command:workbench.action.chat.open)",
+            "media": {
+              "markdown": "resources/walkthrough/generate.md"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "npm run compile",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^25.6.0",
+    "@types/vscode": "^1.99.0",
+    "@vscode/vsce": "^3.2.1",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.1"
+  }
+}

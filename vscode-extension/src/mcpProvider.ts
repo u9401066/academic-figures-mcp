@@ -1,0 +1,288 @@
+import * as fs from "fs";
+import * as path from "path";
+import * as vscode from "vscode";
+
+export type AcademicFiguresRuntimeTarget = "server" | "directRun";
+
+export type AcademicFiguresRuntimeSpec = {
+  mode: "local" | "package";
+  command: string;
+  args: string[];
+  cwd?: string;
+  env: Record<string, string>;
+};
+
+export const GOOGLE_API_KEY_SECRET = "academicFiguresMcp.googleApiKey";
+export const OPENROUTER_API_KEY_SECRET = "academicFiguresMcp.openRouterApiKey";
+export const SECRET_STORAGE_SOURCE = "secretStorage";
+export const ENV_FILE_SOURCE = "envFile";
+export const PROCESS_ENV_SOURCE = "processEnv";
+export const DEFAULT_ENV_FILE = ".vscode/academic-figures.env";
+const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const DEFAULT_OPENROUTER_MODEL = "google/gemini-3.1-flash-image-preview";
+const DEFAULT_GOOGLE_MODEL = "gemini-3.1-flash-image-preview";
+const DEFAULT_OPENROUTER_TITLE = "Academic Figures MCP";
+const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1";
+const DEFAULT_OLLAMA_MODEL = "llava:latest";
+
+export class AcademicFiguresMcpProvider
+  implements vscode.McpServerDefinitionProvider<vscode.McpStdioServerDefinition>
+{
+  private readonly changeEmitter = new vscode.EventEmitter<void>();
+
+  public readonly onDidChangeMcpServerDefinitions = this.changeEmitter.event;
+
+  public constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly outputChannel: vscode.OutputChannel,
+  ) {}
+
+  public refresh(): void {
+    this.changeEmitter.fire();
+  }
+
+  public dispose(): void {
+    this.changeEmitter.dispose();
+  }
+
+  public async provideMcpServerDefinitions(): Promise<vscode.McpStdioServerDefinition[]> {
+    const runtime = await this.getRuntimeSpec("server");
+
+    this.log(
+      `Providing MCP server definition (${runtime.mode}) -> ${runtime.command} ${runtime.args.join(" ")}`,
+    );
+
+    return [
+      {
+        label: "Academic Figures MCP",
+        command: runtime.command,
+        args: runtime.args,
+        cwd: runtime.cwd ? vscode.Uri.file(runtime.cwd) : undefined,
+        env: runtime.env,
+      },
+    ];
+  }
+
+  public async getRuntimeSpec(target: AcademicFiguresRuntimeTarget): Promise<AcademicFiguresRuntimeSpec> {
+    const env = await this.buildEnvironment();
+    const launch = this.resolveLaunch(target);
+    return {
+      ...launch,
+      env,
+    };
+  }
+
+  /**
+   * Resolve server before starting (optional last-minute customization).
+   */
+  public resolveMcpServerDefinition(
+    server: vscode.McpStdioServerDefinition,
+    _token: vscode.CancellationToken,
+  ): vscode.ProviderResult<vscode.McpStdioServerDefinition> {
+    this.log(`Resolving server "${server.label}"`);
+    return server;
+  }
+
+  private async buildEnvironment(): Promise<Record<string, string>> {
+    const config = vscode.workspace.getConfiguration("academicFiguresMcp");
+    const provider = config.get<string>("imageProvider", "google");
+    const credentialSource = config.get<string>("credentialSource", SECRET_STORAGE_SOURCE);
+    const workspaceRoot = this.getWorkspaceRoot();
+    const artifactRoot = workspaceRoot
+      ? path.join(workspaceRoot, config.get<string>("outputDir", ".academic-figures"), "outputs")
+      : "";
+    const environmentFile = config.get<string>("environmentFile", DEFAULT_ENV_FILE);
+    const envFilePath = this.resolveEnvironmentFilePath(environmentFile, workspaceRoot);
+    const env: Record<string, string> = this.readProcessEnvironment();
+
+    if (credentialSource === ENV_FILE_SOURCE && envFilePath) {
+      Object.assign(env, this.readEnvironmentFile(envFilePath));
+    }
+
+    const googleApiKey =
+      credentialSource === SECRET_STORAGE_SOURCE
+        ? (await this.context.secrets.get(GOOGLE_API_KEY_SECRET)) ?? env.GOOGLE_API_KEY
+        : env.GOOGLE_API_KEY;
+    const openRouterApiKey =
+      credentialSource === SECRET_STORAGE_SOURCE
+        ? (await this.context.secrets.get(OPENROUTER_API_KEY_SECRET)) ?? env.OPENROUTER_API_KEY
+        : env.OPENROUTER_API_KEY;
+
+    env.AFM_IMAGE_PROVIDER = provider;
+    if (provider === "openrouter") {
+      env.GEMINI_MODEL = config.get<string>("openRouterModel", DEFAULT_OPENROUTER_MODEL);
+    } else if (provider === "ollama") {
+      env.GEMINI_MODEL = config.get<string>("ollamaModel", DEFAULT_OLLAMA_MODEL);
+    } else {
+      env.GEMINI_MODEL = config.get<string>("googleModel", DEFAULT_GOOGLE_MODEL);
+    }
+
+    if (googleApiKey) {
+      env.GOOGLE_API_KEY = googleApiKey;
+    }
+    if (openRouterApiKey) {
+      env.OPENROUTER_API_KEY = openRouterApiKey;
+    }
+    if (provider === "openrouter") {
+      env.OPENROUTER_BASE_URL = config.get<string>("openRouterBaseUrl", DEFAULT_OPENROUTER_BASE_URL);
+
+      const referer = config.get<string>("openRouterReferer", "").trim();
+      const title = config.get<string>("openRouterTitle", DEFAULT_OPENROUTER_TITLE).trim();
+      if (referer) {
+        env.OPENROUTER_HTTP_REFERER = referer;
+      }
+      if (title) {
+        env.OPENROUTER_APP_TITLE = title;
+      }
+    }
+
+    const ollamaBaseUrl = config.get<string>("ollamaBaseUrl", DEFAULT_OLLAMA_BASE_URL).trim();
+    const ollamaModel = config.get<string>("ollamaModel", DEFAULT_OLLAMA_MODEL).trim();
+    if (ollamaBaseUrl) {
+      env.OLLAMA_BASE_URL = ollamaBaseUrl;
+    }
+    if (ollamaModel) {
+      env.OLLAMA_MODEL = ollamaModel;
+    }
+    if (artifactRoot) {
+      env.AFM_OUTPUT_DIR = artifactRoot;
+    }
+    if (config.get<string>("transport", "stdio") === "streamable-http") {
+      env.MCP_TRANSPORT = "streamable-http";
+    }
+
+    return env;
+  }
+
+  private resolveLaunch(target: AcademicFiguresRuntimeTarget): { mode: "local" | "package"; command: string; args: string[]; cwd?: string } {
+    const config = vscode.workspace.getConfiguration("academicFiguresMcp");
+    const preferLocalSource = config.get<boolean>("preferLocalSource", true);
+    const pythonCommand = config.get<string>("pythonCommand", "python");
+    const packageName = config.get<string>("packageName", "academic-figures-mcp");
+    const localRoot = preferLocalSource ? this.findLocalSource() : undefined;
+
+    if (localRoot) {
+      return {
+        mode: "local",
+        command: "uv",
+        args:
+          target === "server"
+            ? ["run", pythonCommand, "-m", "src.presentation.server"]
+            : ["run", pythonCommand, "-m", "src.presentation.direct_run"],
+        cwd: localRoot,
+      };
+    }
+
+    return {
+      mode: "package",
+      command: "uvx",
+      args: ["--from", packageName, target === "server" ? "afm-server" : "afm-run"],
+      cwd: this.getWorkspaceRoot(),
+    };
+  }
+
+  private findLocalSource(): string | undefined {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return undefined;
+    }
+
+    const pyprojectPath = path.join(workspaceRoot, "pyproject.toml");
+    const serverPath = path.join(workspaceRoot, "src", "presentation", "server.py");
+    if (!fs.existsSync(pyprojectPath) || !fs.existsSync(serverPath)) {
+      return undefined;
+    }
+
+    try {
+      const pyproject = fs.readFileSync(pyprojectPath, "utf8");
+      if (pyproject.includes('name = "academic-figures-mcp"')) {
+        return workspaceRoot;
+      }
+    } catch {
+      this.log("Failed to inspect pyproject.toml while resolving local source.");
+    }
+
+    return undefined;
+  }
+
+  private getWorkspaceRoot(): string | undefined {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+
+  private readProcessEnvironment(): Record<string, string> {
+    return {
+      ...Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+      ),
+    };
+  }
+
+  private resolveEnvironmentFilePath(configuredPath: string, workspaceRoot: string | undefined): string | undefined {
+    const trimmed = configuredPath.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    if (path.isAbsolute(trimmed)) {
+      return trimmed;
+    }
+    if (workspaceRoot) {
+      return path.join(workspaceRoot, trimmed);
+    }
+    return path.resolve(trimmed);
+  }
+
+  private readEnvironmentFile(filePath: string): Record<string, string> {
+    if (!fs.existsSync(filePath)) {
+      this.log(`Configured environment file was not found: ${filePath}`);
+      return {};
+    }
+
+    try {
+      const content = fs.readFileSync(filePath, "utf8");
+      const values: Record<string, string> = {};
+
+      for (const rawLine of content.split(/\r?\n/u)) {
+        const trimmed = rawLine.trim();
+        if (!trimmed || trimmed.startsWith("#")) {
+          continue;
+        }
+
+        const normalized = trimmed.startsWith("export ")
+          ? trimmed.slice("export ".length).trim()
+          : trimmed.startsWith("set ")
+            ? trimmed.slice("set ".length).trim()
+            : trimmed;
+        const separatorIndex = normalized.indexOf("=");
+        if (separatorIndex <= 0) {
+          continue;
+        }
+
+        const key = normalized.slice(0, separatorIndex).trim();
+        const value = this.normalizeEnvironmentValue(normalized.slice(separatorIndex + 1).trim());
+        if (key) {
+          values[key] = value;
+        }
+      }
+
+      this.log(`Loaded environment variables from ${filePath}`);
+      return values;
+    } catch {
+      this.log(`Failed to read environment file: ${filePath}`);
+      return {};
+    }
+  }
+
+  private normalizeEnvironmentValue(value: string): string {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      return value.slice(1, -1);
+    }
+    return value;
+  }
+
+  private log(message: string): void {
+    this.outputChannel.appendLine(`[mcpProvider] ${message}`);
+  }
+}
