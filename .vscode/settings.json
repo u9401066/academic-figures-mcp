@@ -1,0 +1,12 @@
+{
+  "files.exclude": {
+    "**/*.egg-info": true
+  },
+  "search.exclude": {
+    "**/*.egg-info": true,
+    "**/*.egg-info/**": true
+  },
+  "markdownlint.ignore": [
+    "**/*.egg-info/**"
+  ]
+}

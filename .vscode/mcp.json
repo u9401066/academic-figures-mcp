@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "academicFigures": {
+      "type": "stdio",
+      "envFile": "${workspaceFolder}/env",
+      "command": "uv",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}",
+        "python",
+        "-m",
+        "src.presentation.server"
+      ]
+    }
+  }
+}
