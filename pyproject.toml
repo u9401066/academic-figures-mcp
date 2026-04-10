@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
-name = "openclaw-illustrator-mcp"
+name = "academic-figures-mcp"
 version = "0.1.0"
 description = "Medical academic figure generator MCP server"
 requires-python = ">=3.10"
@@ -15,4 +15,4 @@ dependencies = [
 ]
 
 [project.scripts]
-illustrator-mcp = "src.server:main"
+afm-server = "src.server:main"
