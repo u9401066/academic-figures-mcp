@@ -1,18 +1,23 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0"]
 build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "academic-figures-mcp"
-version = "0.1.0"
-description = "Medical academic figure generator MCP server"
+version = "0.2.0"
+description = "Academic figure generation MCP server for AI agents — turn PubMed IDs into publication-ready scientific figures"
+readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
 dependencies = [
     "mcp[cli]>=1.0.0",
-    "httpx>=0.27",
+    "httpx>=0.27.0",
     "google-genai>=1.0.0",
     "pillow>=10.0",
 ]
 
 [project.scripts]
 afm-server = "src.server:main"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
