@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+env:
+  UV_CACHE_DIR: .uv-cache
+
+jobs:
+  # ==========================================
+  # 文檔檢查
+  # ==========================================
+  docs-check:
+    name: 📚 Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required files exist
+        run: |
+          files=("README.md" "LICENSE" ".github/copilot-instructions.md")
+          for file in "${files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Missing required file: $file"
+              exit 1
+            fi
+          done
+          echo "✅ All required files exist"
+
+  # ==========================================
+  # 靜態分析
+  # ==========================================
+  lint:
+    name: 🧹 Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      - name: Ruff Linting
+        run: uv run ruff check . --output-format=github
+      - name: Ruff Format Check
+        run: uv run ruff format --check .
+
+  typecheck:
+    name: 🔍 Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      - run: uv run mypy src/ --config-file pyproject.toml
+
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      - name: Bandit Security Scan
+        run: uv run bandit -r src/ -c pyproject.toml -q
+      - name: Bandit JSON Report
+        if: always()
+        run: uv run bandit -r src/ -c pyproject.toml -f json -o bandit-report.json || true
+      - name: Upload Bandit Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+          retention-days: 30
+
+  # ==========================================
+  # 多平台單元測試
+  # ==========================================
+  test:
+    name: 🧪 Test (${{ matrix.os }} / py${{ matrix.python-version }})
+    needs: [lint, typecheck]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Pin Python version
+        run: uv python pin ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run tests with coverage
+        run: >-
+          uv run pytest tests/ -x -q --tb=short
+          --cov=src
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+          --junitxml=test-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: test-results.xml
+          retention-days: 30
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30
+
+  # ==========================================
+  # 測試結果摘要
+  # ==========================================
+  summary:
+    name: 📋 Summary
+    if: always()
+    needs: [docs-check, lint, typecheck, security, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🧪 CI Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 📚 Docs Check | ${{ needs.docs-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧹 Lint & Format | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Type Check | ${{ needs.typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔒 Security Scan | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Tests (9 matrix) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify all jobs passed
+        run: |
+          if [ "${{ needs.docs-check.result }}" != "success" ] || \
+             [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.typecheck.result }}" != "success" ] || \
+             [ "${{ needs.security.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ]; then
+            echo "❌ One or more required jobs failed"
+            exit 1
+          fi
+          echo "✅ All checks passed!"

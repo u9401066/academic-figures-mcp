@@ -1,0 +1,114 @@
+# ============================================================
+# Pre-commit Hooks 配置
+# 使用方式：
+#   uv add --dev pre-commit
+#   uv run pre-commit install
+#   uv run pre-commit install --hook-type commit-msg
+#   uv run pre-commit run --all-files  (首次全量檢查)
+# ============================================================
+default_language_version:
+  python: python3.11
+
+# CI 跳過的 hooks（CI workflow 另有負責）
+ci:
+  skip: [mypy, bandit, pytest-unit]
+
+repos:
+  # ==========================================
+  # 基礎格式檢查
+  # ==========================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: ["--branch", "main"]
+
+  # ==========================================
+  # Ruff (lint + format)
+  # ==========================================
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # ==========================================
+  # Gitleaks (secrets detection)
+  # ==========================================
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks
+
+  # ==========================================
+  # Conventional Commits
+  # ==========================================
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert]
+
+  # ==========================================
+  # Local hooks (使用 uv run 保持在專案 venv)
+  # ==========================================
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy type check
+        entry: uv run mypy src/ --config-file pyproject.toml
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+
+      - id: pytest-unit
+        name: pytest unit tests
+        entry: uv run pytest tests/unit/ -x -q --tb=short
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+
+      - id: bandit
+        name: bandit security scan
+        entry: uv run bandit -r src/ -c pyproject.toml -q
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+
+      - id: commit-size-guard
+        name: commit size guard (max 30 files)
+        entry: python scripts/commit_size_guard.py
+        language: system
+        always_run: true
+        pass_filenames: false
+
+      - id: memory-bank-reminder
+        name: memory bank sync reminder
+        entry: python scripts/hooks/memory_bank_reminder.py
+        language: system
+        always_run: true
+        pass_filenames: false
+        verbose: true
+
+      - id: agent-freshness-check
+        name: agent & instruction freshness check
+        entry: python scripts/hooks/agent_freshness_check.py
+        language: system
+        always_run: true
+        pass_filenames: false
+        verbose: true
