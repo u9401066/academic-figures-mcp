@@ -1,0 +1,1 @@
+"""py.typed marker — enables PEP 561 type checking for the package."""

@@ -1,0 +1,279 @@
+profiles:
+  - id: nature_portfolio
+    display_name: Nature Portfolio
+    scope: publisher_family
+    aliases:
+      - Nature
+      - Nature Portfolio
+      - Nature Communications
+      - Nature Medicine
+      - Nature Methods
+      - Nature Reviews
+    source_quality: official
+    sources:
+      - label: Nature figure guide
+        url: https://research-figure-guide.nature.com/figures/preparing-figures-our-specifications/
+        accessed_on: 2026-04-10
+    dimensions_mm:
+      single_column: 89
+      one_and_half_column: 120-136
+      double_column: 183
+      max_height: 247
+    typography:
+      font_families:
+        - Arial
+        - Helvetica
+        - sans-serif
+      body_text_pt: 5-7
+      panel_labels: lowercase bold a/b/c at 8 pt in upper-left corner
+    resolution:
+      line_art: 1000+ dpi or vector
+      halftone: 300-600 dpi
+      combination: 600 dpi
+      color_space: RGB
+    formats:
+      preferred_main:
+        - PDF
+        - EPS
+      accepted_main:
+        - AI
+        - layered PSD
+        - SVG
+        - PDF
+        - EPS
+      extended_data:
+        - JPEG
+        - TIFF
+        - EPS
+    required_rules:
+      - Use a clean publication layout with minimal white-space waste.
+      - Keep all figure text black, sans-serif, and highly legible.
+      - Prefer vector output for charts, line art, and text-heavy diagrams.
+      - Use colorblind-safe palette choices such as the Wong palette.
+    avoid_rules:
+      - No gridlines.
+      - No drop shadows.
+      - No decorative icons unrelated to the data.
+      - No red-green pairings.
+      - No outlined text.
+    prompt_injection:
+      positive:
+        - Nature journal style.
+        - Single-column aware composition.
+        - Clean minimal layout.
+        - Publication-ready figure typography.
+      negative:
+        - Avoid clutter.
+        - Avoid texture fills.
+        - Avoid text over busy imagery.
+
+  - id: science_family
+    display_name: Science Family Journals
+    scope: publisher_family
+    aliases:
+      - Science
+      - Science Advances
+      - Science Translational Medicine
+      - Science Immunology
+      - Science Robotics
+      - Science Signaling
+    source_quality: official
+    sources:
+      - label: Science revised manuscript figure instructions
+        url: https://www.science.org/content/page/instructions-preparing-revised-manuscript
+        accessed_on: 2026-04-10
+    dimensions_mm:
+      single_column: 57
+      double_column: 121
+      triple_column: 184
+    typography:
+      preferred_text_pt: about 7 after reduction
+      minimum_text_pt: 5
+      emphasis: maximize data area and avoid clutter
+    resolution:
+      line_art: 300+ dpi at final size, preferably vector
+      grayscale_and_color: 300 dpi at final size
+      color_space: RGB
+    formats:
+      preferred:
+        - PDF
+        - EPS
+        - AI
+      raster:
+        - TIFF
+      disallowed:
+        - Word-embedded figures
+        - PowerPoint figures
+    required_rules:
+      - Submit each figure as a separate file.
+      - Prefer vector-based figure construction.
+      - Keep symbols and lettering legible after reduction.
+      - Preserve original source images for production review.
+    avoid_rules:
+      - No upsampling.
+      - No wasted white space.
+      - No wide variation in type size within one figure.
+    prompt_injection:
+      positive:
+        - Science journal figure style.
+        - Vector-first layout.
+        - Compact, data-dense composition.
+      negative:
+        - Avoid oversized labels.
+        - Avoid raster-only charts when vector is possible.
+
+  - id: jama_network
+    display_name: JAMA Network
+    scope: journal_family
+    aliases:
+      - JAMA
+      - JAMA Network
+      - JAMA Internal Medicine
+      - JAMA Surgery
+      - JAMA Network Open
+    source_quality: official
+    sources:
+      - label: JAMA instructions for authors
+        url: https://jamanetwork.com/journals/jama/pages/instructions-for-authors
+        accessed_on: 2026-04-10
+    typography:
+      notes: journal graphics team recreates accepted figures to house style
+      online_only_text: Arial 10 pt with 8 pt legends in supplements
+    resolution:
+      illustrations: 350 ppi minimum
+      clinical_images: 350 ppi minimum
+      line_drawings: 600 ppi minimum
+      online_photo_width_in: 3-5
+      color_space: RGB or grayscale depending on image type
+    formats:
+      vector_preferred_for_graphs:
+        - AI
+        - EPS
+        - PDF
+        - EMF
+        - WMF
+        - XLS
+      photo_publication:
+        - EPS
+        - JPG
+        - PSD
+        - TIF
+    required_rules:
+      - Use data markers and error bars for summary statistics.
+      - Plot ratio measures on a log scale.
+      - Define all symbols, colors, and line styles in the legend.
+      - Submit labeled and unlabeled versions when arrows or markers are used on clinical images.
+    avoid_rules:
+      - No pie charts.
+      - No 3-D graphs.
+      - No stacked bar charts unless strongly justified.
+      - Do not present primary outcome data only as figures.
+      - Avoid more than 4 panels unless justified.
+    prompt_injection:
+      positive:
+        - JAMA Network statistical graphic style.
+        - High-contrast, editorially clean labels.
+        - Explicit uncertainty markers.
+      negative:
+        - Avoid decorative chart effects.
+        - Avoid ambiguous axes or unlabeled units.
+
+  - id: nejm
+    display_name: New England Journal of Medicine
+    scope: journal
+    aliases:
+      - NEJM
+      - New England Journal of Medicine
+      - N Engl J Med
+    source_quality: official
+    sources:
+      - label: NEJM new manuscripts guidance
+        url: https://www.nejm.org/author-center/new-manuscripts
+        accessed_on: 2026-04-10
+    display_item_limits:
+      original_articles: 5 figures and tables combined
+    formats:
+      data_visualization:
+        - AI
+        - EPS
+        - SVG
+      illustration_submission_strategy:
+        - Sketch
+        - Diagram
+        - PowerPoint slide
+        - Detailed learning objective
+    required_rules:
+      - Submit editable vector files for charts, plots, flow diagrams, and maps.
+      - For medical illustrations, provide a simple schematic plus a clear educational objective instead of polished final artwork.
+      - Include figure titles and legends with sufficient clinical context.
+      - Use conventional units in figures and provide conversions in legends or footnotes when needed.
+    avoid_rules:
+      - Do not submit finished medical illustrations as final art.
+      - Avoid over-designed infographic styling.
+      - Avoid figures that hide the key learning objective.
+    prompt_injection:
+      positive:
+        - NEJM clinical visual style.
+        - Educationally direct composition.
+        - Vector-editable charts.
+      negative:
+        - Avoid decorative polish that competes with the learning objective.
+        - Avoid dense nonessential annotations.
+
+  - id: the_lancet
+    display_name: The Lancet
+    scope: journal_family
+    aliases:
+      - The Lancet
+      - Lancet
+      - The Lancet Regional Health
+      - The Lancet Digital Health
+    source_quality: mixed_official_and_editorial_summary
+    sources:
+      - label: The Lancet information for authors
+        url: https://www.thelancet.com/journals/lancet/information-for-authors
+        accessed_on: 2026-04-10
+      - label: Existing project standards summary
+        url: https://www.thelancet.com/
+        accessed_on: 2026-04-09
+    display_item_limits:
+      article: 5 figures and tables combined
+      review_or_seminar: 6
+      comment: 1
+      correspondence: 1
+      viewpoint: 2
+    dimensions_mm:
+      single_column: 79
+      double_column: 169
+    typography:
+      font_families:
+        - Arial
+        - Helvetica
+      text_pt: 8-10
+      panel_labels: uppercase bold A/B/C
+    resolution:
+      raster: 300 dpi minimum
+      line_art: 1000 dpi
+      color_space: RGB
+    formats:
+      accepted:
+        - TIFF
+        - EPS
+        - PDF
+        - high-quality JPEG
+    required_rules:
+      - Use uppercase panel labels.
+      - Keep table styling simple with horizontal rules only.
+      - Prefer clean clinical layouts over magazine-style infographics.
+    avoid_rules:
+      - No vertical table lines.
+      - No excessive decorative color.
+      - Do not exceed article display-item limits.
+    prompt_injection:
+      positive:
+        - The Lancet clinical figure style.
+        - Compact single-column aware composition.
+        - Clean uppercase panel labeling.
+      negative:
+        - Avoid decorative presentation-sheet layouts.
+        - Avoid crowded multi-panel montages.
