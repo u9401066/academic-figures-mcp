@@ -111,8 +111,7 @@ class GeminiAdapter(ImageGenerator):
         model_name = model or self._config.default_model
         if not self._config.is_google:
             raise ValueError(
-                "Multi-turn edit sessions are only supported for the "
-                "direct Google provider."
+                "Multi-turn edit sessions are only supported for the direct Google provider."
             )
         chat = self._google_client().chats.create(model=model_name)
         return EditSession(chat=chat, model=model_name)
@@ -321,10 +320,7 @@ class GeminiAdapter(ImageGenerator):
         model_name: str,
         start: float,
     ) -> GenerationResult:
-        image_data_url = (
-            f"data:{mime_type};base64,"
-            f"{base64.b64encode(image_bytes).decode('utf-8')}"
-        )
+        image_data_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
         text, error = self._ollama_chat(
             messages=[
                 {
@@ -417,9 +413,7 @@ class GeminiAdapter(ImageGenerator):
         if sections_match:
             raw_sections = sections_match.group(1)
             section_tokens = [
-                token.strip(" -")
-                for token in re.split(r"→|,", raw_sections)
-                if token.strip()
+                token.strip(" -") for token in re.split(r"→|,", raw_sections) if token.strip()
             ]
 
         sections = [
@@ -782,8 +776,7 @@ class GeminiAdapter(ImageGenerator):
     def _looks_like_evaluation_instruction(self, instruction: str) -> bool:
         lowered = instruction.lower()
         return any(
-            token in lowered
-            for token in ("evaluate this", "overall score", "critical issues")
+            token in lowered for token in ("evaluate this", "overall score", "critical issues")
         )
 
     def _parse_openrouter_response(

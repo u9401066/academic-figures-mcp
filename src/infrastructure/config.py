@@ -169,9 +169,7 @@ def load_config() -> ServerConfig:
         AFM_ENABLE_PROVIDER_FALLBACK — fallback between Google and
         OpenRouter when both are configured
     """
-    provider = _normalize_provider(
-        os.environ.get("AFM_IMAGE_PROVIDER", GOOGLE_PROVIDER)
-    )
+    provider = _normalize_provider(os.environ.get("AFM_IMAGE_PROVIDER", GOOGLE_PROVIDER))
     google_api_key = os.environ.get("GOOGLE_API_KEY", "")
     openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
     ollama_model = os.environ.get("OLLAMA_MODEL", _default_model_for(OLLAMA_PROVIDER))

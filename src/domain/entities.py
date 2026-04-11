@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
@@ -68,6 +68,6 @@ class GenerationJob:
     language: str = "zh-TW"
     output_size: str = "1024x1536"
     status: JobStatus = JobStatus.PENDING
-    created_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     output_path: str = ""
     error: str = ""

@@ -18,8 +18,8 @@ MSG_REMINDER: str = (
     "\n💡 Memory Bank Reminder: source files changed but memory-bank/ "
     "was not updated.\n"
     "   Consider running: UMB (Update Memory Bank) in your next session.\n"
-    if not _USE_ZH else
-    "\n💡 Memory Bank 提醒: 原始碼已變更但 memory-bank/ 未同步更新.\n"
+    if not _USE_ZH
+    else "\n💡 Memory Bank 提醒: 原始碼已變更但 memory-bank/ 未同步更新.\n"
     "   建議在下次工作階段執行: UMB (更新 Memory Bank)\n"
 )
 

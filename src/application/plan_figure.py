@@ -93,14 +93,8 @@ class PlanFigureUseCase:
 
         academic_constraints = [
             "Preserve citation integrity and PMID traceability",
-            (
-                "Prefer publication-safe typography and legibility over "
-                "decorative styling"
-            ),
-            (
-                "Avoid bitmap-first rendering for numerically exact or "
-                "text-heavy figures"
-            ),
+            ("Prefer publication-safe typography and legibility over decorative styling"),
+            ("Avoid bitmap-first rendering for numerically exact or text-heavy figures"),
         ]
         if req.language != "en":
             academic_constraints.append(
@@ -113,9 +107,7 @@ class PlanFigureUseCase:
             )
 
         must_include = [f"PMID {paper.pmid}"]
-        citation = " · ".join(
-            part for part in (paper.authors, paper.journal) if part
-        )
+        citation = " · ".join(part for part in (paper.authors, paper.journal) if part)
         if citation:
             must_include.append(citation)
 

@@ -20,15 +20,11 @@ INSTRUCTIONS = Path(".github/copilot-instructions.md")
 _LANG = os.environ.get("LANG", "").lower()
 _USE_ZH = "zh" in _LANG or "tw" in _LANG or _LANG.startswith("zh")
 
-MSG_HEADER: str = (
-    "\n🔄 Agent Freshness Check:"
-    if not _USE_ZH else
-    "\n🔄 Agent 新鮮度檢查:"
-)
+MSG_HEADER: str = "\n🔄 Agent Freshness Check:" if not _USE_ZH else "\n🔄 Agent 新鮮度檢查:"
 MSG_FOOTER: str = (
     "   Consider reviewing and updating these files.\n"
-    if not _USE_ZH else
-    "   建議檢視並更新這些檔案.\n"
+    if not _USE_ZH
+    else "   建議檢視並更新這些檔案.\n"
 )
 MSG_DAYS_AGO: str = "last updated {days} days ago"
 MSG_DAYS_AGO_ZH: str = "上次更新於 {days} 天前"
