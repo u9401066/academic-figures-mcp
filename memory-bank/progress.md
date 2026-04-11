@@ -14,6 +14,9 @@
 - Added a cross-platform local launcher and replaced PowerShell-only static MCP startup guidance with shell-neutral `uv --project` launch instructions.
 - Converged the legacy PMID input path in generate_figure onto an internal plan-first bridge so generation always runs from planned_payload.
 - Synced the VS Code extension vector icon with the newer PNG brand asset.
+- Generated repo-owned README visuals through the local MCP workflow and saved curated payloads, output images, and QA reports under .academic-figures/.
+- Iterated the workflow figure to a stricter v2 so the duplicated Payload step was removed and the main flow is now unambiguous.
+- Updated README.md to embed the generated visuals, link their QA reports, and explicitly document that both the images and reviews are self-generated through this repository.
 
 ## Doing
 

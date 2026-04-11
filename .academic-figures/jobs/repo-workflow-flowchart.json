@@ -1,30 +1,31 @@
 {
-  "asset_kind": "workflow_flowchart",
-  "title": "Academic Figures MCP Workflow",
-  "goal": "Create a clear process flowchart that shows how the product moves from an input request to a publication-grade figure: input, plan, prompt or payload assembly, generate, evaluate, iterate, output.",
+  "asset_kind": "workflow_flowchart_v2",
+  "title": "Academic Figures MCP Workflow v2",
+  "goal": "Create a strict repo-specific process flowchart that shows the current plan-first workflow exactly once per step: Input, Plan, Payload, Generate, Evaluate, Iterate, Output. The diagram must remove the duplicate PAYLOAD error from the previous version and keep the main path unambiguous.",
   "selected_figure_type": "flowchart",
   "render_route": "image_generation",
   "style_preset": "repo_workflow_flowchart",
   "language": "en",
   "output_size": "1536x1024",
-  "visual_direction": "structured, readable, process-centric, modern technical flowchart",
+  "visual_direction": "strict, repo-specific, process-centric, highly legible technical flowchart with one unambiguous main path",
   "source_context": {
     "repo": "academic-figures-mcp",
     "tagline": "plan-first figure workflow",
-    "summary": "Input -> Plan -> Payload -> Generate -> Evaluate -> Iterate -> Output"
+    "summary": "Input -> Plan -> Payload -> Generate -> Evaluate -> Iterate -> Output, with one feedback loop only"
   },
   "must_include": [
-    "seven large readable process nodes: Input, Plan, Payload, Generate, Evaluate, Iterate, Output",
-    "directional arrows showing forward movement through the pipeline",
-    "a feedback loop from Evaluate or Iterate back toward Generate or Plan",
+    "exactly seven large readable process nodes: Input, Plan, Payload, Generate, Evaluate, Iterate, Output",
+    "the label Payload must appear exactly once in the entire diagram",
+    "one clear forward main path from Input to Output with no duplicated step names",
+    "one explicit feedback loop from Evaluate or Iterate back toward Plan or Generate",
     "visual cues for academic rigor such as paper cards, rubric, and polished figure cards",
     "simple clean layout suitable for documentation"
   ],
   "references": [
     "Use short English node labels to maximize legibility",
-    "Prefer a top-down or left-to-right flow with one explicit feedback loop"
+    "Prefer a top-down or left-to-right flow with one explicit feedback loop and one primary reading direction"
   ],
   "prompt_pack": {
-    "prompt": "## Block 1: TITLE & PURPOSE\ntitle: 'Academic Figures MCP Workflow'\npurpose: Create a process flowchart showing the end-to-end workflow of Academic Figures MCP from initial scientific input to publication-grade output.\n\n## Block 2: LAYOUT\nasset_kind: workflow_flowchart\nfigure_type: flowchart\ncomposition: A clean left-to-right or top-to-bottom process diagram with seven large process nodes and one obvious feedback loop.\n\n## Block 3: ELEMENTS\nrepo: academic-figures-mcp\nmust_include: Input; Plan; Payload; Generate; Evaluate; Iterate; Output\nreferences: show a feedback loop from Evaluate and Iterate back into the workflow; include subtle academic motifs like a paper card, rubric card, and polished figure card\n\n## Block 4: COLOR\npalette: academic navy base, teal process arrows, amber emphasis for Generate and Output, warm ivory process cards\nstyle_preset: repo_workflow_flowchart\nvisual_direction: process clarity first, compact but spacious, premium technical diagram\n\n## Block 5: TEXT\nlanguage: English\ntext_usage: only the short process labels above; keep text large and legible\n\n## Block 6: STYLE\nstyle: clean vector-like flowchart, bold simple shapes, excellent readability, documentation-ready\nnegative_constraints: avoid clutter, avoid dense explanatory paragraphs, avoid handwritten sketch style, avoid tiny labels\n\n## Block 7: SIZE\ncanvas: 1536x1024"
+    "prompt": "## Block 1: TITLE & PURPOSE\ntitle: 'Academic Figures MCP Workflow v2'\npurpose: Create a strict process flowchart showing the current Academic Figures MCP workflow from scientific input to publication-grade output. This version must explicitly fix the previous duplicate PAYLOAD mistake and present one clean main flow.\n\n## Block 2: LAYOUT\nasset_kind: workflow_flowchart_v2\nfigure_type: flowchart\ncomposition: One clean left-to-right or top-to-bottom process diagram with exactly seven nodes on the main path. The main path should read once through the pipeline. Add only one secondary feedback loop.\n\n## Block 3: ELEMENTS\nrepo: academic-figures-mcp\nexact_main_path: Input -> Plan -> Payload -> Generate -> Evaluate -> Iterate -> Output\nhard_constraints: the node label Payload appears exactly once; do not repeat any step name; do not add extra unlabeled nodes; avoid parallel duplicate branches\nreferences: include subtle academic cues such as a paper input card, a rubric or checklist near Evaluate, and a polished figure card near Output\n\n## Block 4: COLOR\npalette: academic navy base, teal process arrows, amber emphasis for Generate and Output, warm ivory process cards\nstyle_preset: repo_workflow_flowchart\nvisual_direction: process clarity first, strict, exact, spacious, premium technical diagram\n\n## Block 5: TEXT\nlanguage: English\ntext_usage: only the seven short process labels above; keep every label large and legible; no repeated labels anywhere\n\n## Block 6: STYLE\nstyle: clean vector-like flowchart, bold simple shapes, excellent readability, documentation-ready\nnegative_constraints: do not repeat PAYLOAD; avoid clutter; avoid dense explanatory paragraphs; avoid handwritten sketch style; avoid tiny labels; avoid ambiguous arrow crossings\n\n## Block 7: SIZE\ncanvas: 1536x1024"
   }
 }

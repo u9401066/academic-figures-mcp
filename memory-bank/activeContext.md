@@ -7,6 +7,7 @@
 - Cross-platform MCP launch hardening is in progress so the repo-level configuration and manual bootstrap path work cleanly on Windows, macOS, and Linux.
 - The current implementation pass is converging legacy PMID generation onto a strict internal plan-first flow while keeping the external compatibility bridge alive.
 - The VS Code extension branding assets are being synchronized so icon.svg stays consistent with the new PNG icon.
+- The repository is now using its own MCP generate/evaluate workflow to create README-facing introduction, architecture, and workflow visuals, with the workflow diagram iterated to a stricter v2.
 - Current planning focus is to prioritize implementation for poster generation, grouped figures, composite montage output, journal retargeting for an existing image, prompt retention for replay, and style-to-prompt extraction.
 
 ## Current Blockers
