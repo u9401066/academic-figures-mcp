@@ -1,0 +1,20 @@
+{
+  "status": "ok",
+  "image_path": ".academic-figures\\outputs\\academic_figures_mcp_infographic_1775869168.png",
+  "figure_type": "infographic",
+  "domains": [
+    "text_accuracy",
+    "anatomy",
+    "color",
+    "layout",
+    "scientific_accuracy",
+    "legibility",
+    "visual_polish",
+    "citation"
+  ],
+  "evaluation_text": "**Evaluation:**\n\n*   **Text Accuracy (5/5):** Clear and relevant text headers and sub-headers.\n*   **Anatomy (5/5):** Logical flow of inputs, processes, and outputs.\n*   **Color (5/5):** Harmonious and professional palette that enhances readability.\n*   **Layout (5/5):** Clean, balanced, and organized placement of all visual elements.\n*   **Scientific Accuracy (5/5):** Accurately represents a workflow for generating figures from paper concepts.\n*   **Legibility (5/5):** High readability due to clear fonts and sufficient contrast.\n*   **Visual Polish (5/5):** Very well-designed, looks like a high-quality publication figure.\n*   **Citation (5/5):** Correct usage of a PMID citation.\n\n**Overall Score: 5.0/5.0**\n\n**Critical Issues:**\n*   None. This is an excellent infographic.",
+  "model": "gemini-3.1-flash-image-preview",
+  "elapsed_seconds": 8.0,
+  "adapter_note": "Evaluation text succeeded. The current adapter still sets error because no image is returned during text-only evaluation.",
+  "error": "No image returned by model"
+}

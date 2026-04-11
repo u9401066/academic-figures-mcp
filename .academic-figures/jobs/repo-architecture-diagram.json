@@ -1,0 +1,31 @@
+{
+  "asset_kind": "system_architecture_diagram_v2",
+  "title": "Academic Figures MCP Architecture v2",
+  "goal": "Create a strict repo-specific architecture diagram that matches the current codebase exactly: MCP hosts and VS Code extension at the edge, presentation and application stacked in the center, then a bottom row with domain on the left and infrastructure on the right, plus PubMed/providers/output artifacts on the integration side.",
+  "selected_figure_type": "flowchart",
+  "render_route": "image_generation",
+  "style_preset": "repo_architecture_clean",
+  "language": "en",
+  "output_size": "1536x1024",
+  "visual_direction": "strict, technical, repo-specific, box-and-arrow, publication-safe architecture poster with explicit dependency direction",
+  "source_context": {
+    "repo": "academic-figures-mcp",
+    "tagline": "DDD academic figure MCP server and VS Code extension",
+    "summary": "Presentation -> Application -> Domain <- Infrastructure, wired by dependency injection, with MCP hosts on the edge and provider/artifact integrations on the side"
+  },
+  "must_include": [
+    "large readable labels for AI Hosts, VS Code Extension, MCP Server, presentation/, application/, domain/, infrastructure/, PubMed, Gemini/OpenRouter/Ollama, .academic-figures outputs",
+    "presentation above application in a central vertical stack",
+    "domain and infrastructure must appear side-by-side on the bottom row, with domain on the left and infrastructure on the right",
+    "an explicit arrow from infrastructure into domain to show Domain <- Infrastructure, not a vertical stack from domain down into infrastructure",
+    "an explicit legend or footer note showing Presentation → Application → Domain ← Infrastructure",
+    "clean arrows with no ambiguous loops and no unrelated external services"
+  ],
+  "references": [
+    "Only show integrations that actually exist in this repo: PubMed, Gemini/OpenRouter/Ollama, output artifacts, MCP hosts, VS Code extension",
+    "Do not show Crossref, OpenAlex, Semantic Scholar, generic cloud APIs, or unrelated microservices"
+  ],
+  "prompt_pack": {
+    "prompt": "## Block 1: TITLE & PURPOSE\ntitle: 'Academic Figures MCP Architecture v2'\npurpose: Create a strict architecture diagram that matches the current repository, not a generic software diagram. It must explain the real DDD layering and the real integration edges of Academic Figures MCP.\n\n## Block 2: LAYOUT\nasset_kind: system_architecture_diagram_v2\nfigure_type: flowchart\ncomposition: Wide architecture poster with three horizontal bands. Top band: AI hosts and VS Code extension. Middle band: MCP server wrapper containing presentation above application. Bottom band: two side-by-side blocks only, with domain on the left and infrastructure on the right. Domain and infrastructure must NOT be stacked vertically. Right edge shows integrations and outputs. Add one small bottom legend for dependency direction.\n\n## Block 3: ELEMENTS\nrepo: academic-figures-mcp\nexact_center_layers: presentation/ ; application/\nexact_bottom_row: domain/ on the left ; infrastructure/ on the right\nexact_edge_labels: AI Hosts ; VS Code Extension ; MCP Server ; PubMed ; Gemini/OpenRouter/Ollama ; .academic-figures outputs\nlayer_sublabels: presentation = server/tools/prompts/resources/dependencies ; application = plan/generate/edit/evaluate/batch use cases ; domain = classifier/entities/interfaces/value_objects/exceptions ; infrastructure = pubmed_client/gemini_adapter/prompt_engine/journal_registry/config\nmust_include: a clean MCP Server wrapper around presentation and application; a leftward arrow from infrastructure into domain; a downward arrow from application into domain; one output branch to generated PNG/SVG and jobs/evaluations artifacts\nreferences: dependency direction must be visually obvious as Presentation -> Application -> Domain <- Infrastructure\n\n## Block 4: COLOR\npalette: deep academic navy frame/background, warm ivory layer cards, teal arrows for dependency flow, amber highlights for integrations and output artifacts\nstyle_preset: repo_architecture_clean\nvisual_direction: strict, exact, technical, highly legible, polished repository poster\n\n## Block 5: TEXT\nlanguage: English\ntext_usage: use only the exact labels above and short sublabels; keep all node text large, short, and readable; do not add unrelated services or extra examples\n\n## Block 6: STYLE\nstyle: polished technical architecture diagram, aligned boxes, clear arrow hierarchy, one small legend/footer, vector-like clarity\nnegative_constraints: do not stack domain over infrastructure or infrastructure under domain; avoid generic external API examples; avoid clutter; avoid tiny labels; avoid ambiguous arrows; avoid fake code screenshots; avoid photorealism\n\n## Block 7: SIZE\ncanvas: 1536x1024"
+  }
+}

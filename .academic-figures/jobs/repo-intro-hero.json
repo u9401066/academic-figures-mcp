@@ -1,0 +1,30 @@
+{
+  "asset_kind": "repo_intro_hero",
+  "title": "Academic Figures MCP Introduction",
+  "goal": "Create a polished introduction illustration that explains Academic Figures MCP as a workflow-first harness turning scientific input into publication-ready figures through planning, generation, evaluation, and iteration.",
+  "selected_figure_type": "infographic",
+  "render_route": "image_generation",
+  "style_preset": "repo_intro_editorial",
+  "language": "en",
+  "output_size": "1536x1024",
+  "visual_direction": "editorial, modern, structured, premium, product-intro visual rather than a literal software screenshot",
+  "source_context": {
+    "repo": "academic-figures-mcp",
+    "tagline": "workflow-first academic figure harness",
+    "summary": "PMID or academic idea in, structured planning and orchestration in the middle, publication-grade figures out"
+  },
+  "must_include": [
+    "central MCP workflow hub with a scientific paper or prompt card entering from the left",
+    "three major stages shown around the hub: plan, generate, evaluate",
+    "output figure cards or polished medical visuals exiting to the right",
+    "subtle orbital links or node connectors suggesting MCP orchestration",
+    "clear visual storytelling with almost no tiny text"
+  ],
+  "references": [
+    "Use deep academic navy, teal, amber, and warm ivory as the main palette",
+    "Keep the composition product-grade and readable for README hero usage"
+  ],
+  "prompt_pack": {
+    "prompt": "## Block 1: TITLE & PURPOSE\ntitle: 'Academic Figures MCP Introduction'\npurpose: Create a premium introduction visual for the Academic Figures MCP repository that quickly explains the product story: workflow-first academic figure planning and production for AI agents.\n\n## Block 2: LAYOUT\nasset_kind: repo_intro_hero\nfigure_type: infographic\ncomposition: Wide editorial hero illustration, left-to-right narrative. Left side shows structured scientific inputs such as a PMID card, paper abstract card, or academic concept brief. Center shows an MCP workflow hub. Right side shows polished publication-grade figures leaving the system.\n\n## Block 3: ELEMENTS\nrepo: academic-figures-mcp\ntagline: workflow-first academic figure harness\nsummary: planning, generation, evaluation, iteration\nmust_include: incoming paper card; MCP workflow hub; three visible workflow stages plan/generate/evaluate; outgoing polished figure cards; elegant node-link connectors\nreferences: minimal large labels only; no tiny UI text; symbolic communication preferred\n\n## Block 4: COLOR\npalette: deep academic navy background, luminous teal workflow links, amber emphasis, warm ivory figure cards\nstyle_preset: repo_intro_editorial\nvisual_direction: publication-grade, modern, confident, clean, product-intentional, not generic AI slop\n\n## Block 5: TEXT\nlanguage: English\ntext_usage: only a few large short labels if needed; avoid dense paragraphs and small captions\n\n## Block 6: STYLE\nstyle: clean editorial scientific infographic with subtle depth, vector-like clarity, premium README hero art\nnegative_constraints: avoid screenshots, avoid clutter, avoid photorealism, avoid purple bias, avoid tiny illegible text\n\n## Block 7: SIZE\ncanvas: 1536x1024"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "status": "ok",
+  "image_path": ".academic-figures\\outputs\\academic_figures_mcp_flowchart_1775869222.png",
+  "figure_type": "flowchart",
+  "domains": [
+    "text_accuracy",
+    "anatomy",
+    "color",
+    "layout",
+    "scientific_accuracy",
+    "legibility",
+    "visual_polish",
+    "citation"
+  ],
+  "evaluation_text": "**Evaluation:**\n\n*   **text_accuracy:** 3 - The repetition of the word \"PAYLOAD\" is a significant text error.\n*   **anatomy:** 5 - Standard flowchart anatomy is clearly defined with nodes and directional arrows.\n*   **color:** 5 - High contrast and a professional color palette enhance clarity.\n*   **layout:** 4 - The grid-like arrangement is organized, but the dense arrows in the 'PAYLOAD-PAYLOAD-GENERATE' area are a bit tight.\n*   **scientific_accuracy:** 3 - A standard figure generation process wouldn't typically show a 'PAYLOAD' step repeated in quick succession.\n*   **legibility:** 5 - Excellent legibility with bold, clear text against high-contrast backgrounds.\n*   **visual_polish:** 5 - Very high visual polish, making the figure stand out and look professional.\n*   **citation:** 1 - There are no citations, but for a general process flowchart, this may be acceptable.\n\n**Overall Score:** 3.8 / 5\n\n**Critical Issues:**\n1.  **Repeated Label:** \"PAYLOAD\" is used twice, in adjacent, redundant steps. This is a clear logical and text error in the process map.\n2.  **Flow Confusion:** The flow from the first \"PAYLOAD\" to the second and then to \"GENERATE\" is visually dense and a little redundant, potentially confusing the user.",
+  "model": "gemini-3.1-flash-image-preview",
+  "elapsed_seconds": 5.66,
+  "adapter_note": "Evaluation text succeeded. The current adapter still sets error because no image is returned during text-only evaluation.",
+  "error": "No image returned by model"
+}
