@@ -126,9 +126,7 @@ class GenerateFigureUseCase:
             or self._as_text(payload.get("figure_type"))
             or (req.figure_type if req.figure_type != "auto" else "infographic")
         )
-        requested_render_route = (
-            self._as_text(payload.get("render_route")) or "image_generation"
-        )
+        requested_render_route = self._as_text(payload.get("render_route")) or "image_generation"
         render_route = requested_render_route
         warnings: list[str] = []
         if requested_render_route != "image_generation":
@@ -155,8 +153,7 @@ class GenerateFigureUseCase:
         source_journal = self._as_text(source_context_dict.get("journal"))
         payload_journal_profile = self._as_dict(payload.get("journal_profile"))
         should_inject_journal = payload_journal_profile is None or (
-            req.target_journal is not None
-            and req.target_journal != payload_target_journal
+            req.target_journal is not None and req.target_journal != payload_target_journal
         )
         journal_profile = payload_journal_profile
         if should_inject_journal:
@@ -264,18 +261,10 @@ class GenerateFigureUseCase:
         references = self._as_text_list(payload.get("references"))
         negative_constraints = []
         if isinstance(prompt_pack, dict):
-            negative_constraints = self._as_text_list(
-                prompt_pack.get("negative_constraints")
-            )
+            negative_constraints = self._as_text_list(prompt_pack.get("negative_constraints"))
 
-        language_text = (
-            f"Traditional Chinese ({language})" if language == "zh-TW" else language
-        )
-        block1 = (
-            "## Block 1: TITLE & PURPOSE\n"
-            f"title: '{title}'\n"
-            f"purpose: {goal}"
-        )
+        language_text = f"Traditional Chinese ({language})" if language == "zh-TW" else language
+        block1 = f"## Block 1: TITLE & PURPOSE\ntitle: '{title}'\npurpose: {goal}"
         block2 = (
             "## Block 2: LAYOUT\n"
             f"asset_kind: {asset_kind}\n"
@@ -284,9 +273,7 @@ class GenerateFigureUseCase:
             "silhouette, readable at small sizes"
         )
         must_include_text = "; ".join(must_include) if must_include else "distinctive brand motif"
-        visual_direction_text = (
-            visual_direction or "publication-grade, bold, compact, memorable"
-        )
+        visual_direction_text = visual_direction or "publication-grade, bold, compact, memorable"
         negative_constraints_text = (
             "; ".join(negative_constraints)
             if negative_constraints
@@ -296,11 +283,7 @@ class GenerateFigureUseCase:
             "## Block 3: ELEMENTS",
             *(source_lines or ["source_context: none"]),
             f"must_include: {must_include_text}",
-            (
-                f"references: {'; '.join(references)}"
-                if references
-                else "references: none"
-            ),
+            (f"references: {'; '.join(references)}" if references else "references: none"),
         ]
         block3 = "\n".join(block3_lines)
         block4 = (

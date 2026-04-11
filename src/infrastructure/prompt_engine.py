@@ -34,9 +34,7 @@ class PromptEngine(PromptBuilder):
         self._templates: dict[str, str] = {}
         self._color_standards: str | None = None
         self._journal_standards: str | None = None
-        self._journal_registry = JournalRegistry(
-            self.template_dir / "journal-profiles.yaml"
-        )
+        self._journal_registry = JournalRegistry(self.template_dir / "journal-profiles.yaml")
         self._load_all()
 
     def build_prompt(

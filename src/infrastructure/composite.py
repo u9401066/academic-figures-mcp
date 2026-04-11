@@ -12,12 +12,15 @@ This implements the "分而治之" strategy:
   Gemini generates each panel → Pillow composites with perfect layout
 """
 
-import os
+from __future__ import annotations
+
+import sys
 from pathlib import Path
-from typing import Optional
+
 from PIL import Image, ImageDraw, ImageFont
 
 # ─── Layout Config ──────────────────────────────────────────────
+
 
 class LayoutConfig:
     """Publication-ready layout parameters.
@@ -71,46 +74,73 @@ class PanelSpec:
 class CompositeFigure:
     """Builds a publication-ready multi-panel figure."""
 
-    def __init__(self, config: Optional[LayoutConfig] = None):
+    def __init__(self, config: LayoutConfig | None = None):
         self.config = config or LayoutConfig()
-        self.panels: list[dict] = []  # {"panel": PanelSpec, "image_path": str}
+        self.panels: list[dict[str, object]] = []
         self.title = ""
         self.caption = ""
         self.citation = ""
 
-    def add_panel(self, spec: PanelSpec, image_path: str) -> "CompositeFigure":
+    def add_panel(self, spec: PanelSpec, image_path: str) -> CompositeFigure:
         """Add a panel image to the composition."""
         self.panels.append({"panel": spec, "image_path": image_path})
         return self
 
-    def set_title(self, title: str) -> "CompositeFigure":
+    def set_title(self, title: str) -> CompositeFigure:
         self.title = title
         return self
 
-    def set_caption(self, caption: str) -> "CompositeFigure":
+    def set_caption(self, caption: str) -> CompositeFigure:
         self.caption = caption
         return self
 
-    def set_citation(self, citation: str) -> "CompositeFigure":
+    def set_citation(self, citation: str) -> CompositeFigure:
         self.citation = citation
         return self
 
-    def get_font(self, size: int) -> ImageFont.FreeTypeFont:
-        """Load a font, with graceful fallback."""
-        font_candidates = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-        ]
-        for path in font_candidates:
-            if os.path.exists(path):
-                return ImageFont.truetype(path, size)
+    def get_font(self, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        """Load a font, with cross-platform graceful fallback."""
+        font_candidates: list[str] = []
+
+        if sys.platform == "win32":
+            # Windows font paths
+            font_candidates.extend(
+                [
+                    "C:\\Windows\\Fonts\\arial.ttf",
+                    "C:\\Windows\\Fonts\\segoeui.ttf",
+                    "C:\\Windows\\Fonts\\calibri.ttf",
+                    "C:\\Windows\\Fonts\\verdana.ttf",
+                ]
+            )
+        elif sys.platform == "darwin":
+            # macOS font paths
+            font_candidates.extend(
+                [
+                    "/System/Library/Fonts/Helvetica.ttc",
+                    "/System/Library/Fonts/SFNSText.ttf",
+                    "/Library/Fonts/Arial.ttf",
+                    "/System/Library/Fonts/Supplemental/Arial.ttf",
+                ]
+            )
+
+        # Linux font paths (also used as fallback on other platforms)
+        font_candidates.extend(
+            [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+                "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+            ]
+        )
+
+        for candidate in font_candidates:
+            if Path(candidate).exists():
+                return ImageFont.truetype(candidate, size)
         return ImageFont.load_default()
 
-    def compose(self, output_path: Optional[str] = None) -> dict:
+    def compose(self, output_path: str | None = None) -> dict[str, object]:
         """Render the final composite figure."""
         cfg = self.config
 
@@ -120,7 +150,6 @@ class CompositeFigure:
 
         # Calculate usable area
         area_left = cfg.MARGIN_LEFT
-        area_top = cfg.MARGIN_TOP
         area_right = cfg.WIDTH - cfg.MARGIN_RIGHT
         area_bottom = cfg.HEIGHT - cfg.MARGIN_BOTTOM
 
@@ -171,16 +200,13 @@ class CompositeFigure:
             if ps["panel"].label:
                 label = ps["panel"].label
                 label_font = self.get_font(cfg.LABEL_FONT_SIZE)
-                self._draw_label(
-                    draw, label, x + 15, y + 15, cfg, label_font
-                )
+                self._draw_label(draw, label, x + 15, y + 15, cfg, label_font)
 
         # Divider lines between panels
         for i in range(n_panels - 1):
             x = area_left + (i + 1) * panel_w + i * cfg.PANEL_GAP
             draw.line(
-                [(x - cfg.PANEL_GAP // 2, panel_top),
-                 (x - cfg.PANEL_GAP // 2, panel_bottom)],
+                [(x - cfg.PANEL_GAP // 2, panel_top), (x - cfg.PANEL_GAP // 2, panel_bottom)],
                 fill=cfg.DIVIDER_COLOR,
                 width=cfg.DIVIDER_WIDTH,
             )
@@ -210,13 +236,20 @@ class CompositeFigure:
             "width_px": cfg.WIDTH,
             "height_px": cfg.HEIGHT,
             "dpi": cfg.DPI,
-            "panles": n_panels,
+            "panels": n_panels,
             "width_inches": round(cfg.WIDTH / cfg.DPI, 1),
             "height_inches": round(cfg.HEIGHT / cfg.DPI, 1),
         }
 
-    def _draw_label(self, draw: ImageDraw, label: str, x: int, y: int,
-                    cfg: LayoutConfig, font: ImageFont.FreeTypeFont) -> None:
+    def _draw_label(
+        self,
+        draw: ImageDraw.ImageDraw,
+        label: str,
+        x: int,
+        y: int,
+        cfg: LayoutConfig,
+        font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    ) -> None:
         """Draw a panel label (e.g., 'A') with a subtle background."""
         bbox = draw.textbbox((0, 0), label, font=font)
         w = (bbox[2] - bbox[0]) + cfg.LABEL_PADDING * 2

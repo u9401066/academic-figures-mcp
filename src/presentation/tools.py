@@ -88,9 +88,7 @@ def generate_figure(
         request = GenerateFigureRequest(
             pmid=normalize_pmid(pmid) if pmid is not None else None,
             planned_payload=(
-                normalize_planned_payload(planned_payload)
-                if planned_payload is not None
-                else None
+                normalize_planned_payload(planned_payload) if planned_payload is not None else None
             ),
             figure_type=normalize_figure_type(figure_type),
             language=normalize_language(language),
@@ -200,18 +198,14 @@ def composite_figure(
         if len(panels) != len(labels):
             raise ValidationError("panels and labels must be the same length")
 
-        from src.composite import CompositeFigure, PanelSpec
+        from src.infrastructure.composite import CompositeFigure, PanelSpec
 
         composer = CompositeFigure()
         for index, panel in enumerate(panels):
             if len(panel) != 2:
-                raise ValidationError(
-                    f"panels[{index}] must contain [image_path, panel_type]"
-                )
+                raise ValidationError(f"panels[{index}] must contain [image_path, panel_type]")
 
-            image_path = normalize_image_path(
-                str(panel[0]), field_name=f"panels[{index}][0]"
-            )
+            image_path = normalize_image_path(str(panel[0]), field_name=f"panels[{index}][0]")
             panel_type = str(panel[1]).strip() or "anatomy"
             label = labels[index].strip()
             if not label:
@@ -230,9 +224,7 @@ def composite_figure(
         composer.set_caption(caption.strip())
         composer.set_citation(citation.strip())
         normalized_output_path = (
-            normalize_image_path(output_path, field_name="output_path")
-            if output_path
-            else None
+            normalize_image_path(output_path, field_name="output_path") if output_path else None
         )
         return composer.compose(normalized_output_path)
     except (ConfigurationError, ValidationError, DomainError) as exc:

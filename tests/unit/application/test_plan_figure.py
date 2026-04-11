@@ -66,9 +66,7 @@ def test_plan_figure_resolves_explicit_target_journal() -> None:
         provider_name="google",
     )
 
-    result = use_case.execute(
-        PlanFigureRequest(pmid="12345678", target_journal="Nature")
-    )
+    result = use_case.execute(PlanFigureRequest(pmid="12345678", target_journal="Nature"))
 
     journal_profile = cast("dict[str, object]", result["journal_profile"])
     planned_payload = cast("dict[str, object]", result["planned_payload"])

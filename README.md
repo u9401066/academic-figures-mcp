@@ -347,7 +347,7 @@ spatial layout, numbering, and mixed styles), it:
 ### Composite Usage
 
 ```python
-from src.composite import CompositeFigure, PanelSpec
+from src.infrastructure.composite import CompositeFigure, PanelSpec
 from src.server import generate_figure
 
 # Step 1: Generate panels separately

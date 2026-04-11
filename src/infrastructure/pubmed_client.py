@@ -22,9 +22,7 @@ class PubMedClient(MetadataFetcher):
             summary.abstract = self._fetch_abstract(pmid)
             return summary
         except Exception as exc:
-            raise PaperNotFoundError(
-                f"Failed to fetch PMID {pmid}: {exc}"
-            ) from exc
+            raise PaperNotFoundError(f"Failed to fetch PMID {pmid}: {exc}") from exc
 
     # ── Internal helpers ────────────────────────────────────
 
@@ -49,9 +47,7 @@ class PubMedClient(MetadataFetcher):
         with urllib.request.urlopen(url, timeout=15) as resp:
             xml = resp.read().decode("utf-8")
 
-        abstracts = re.findall(
-            r"<AbstractText[^>]*>(.*?)</AbstractText>", xml, re.DOTALL
-        )
+        abstracts = re.findall(r"<AbstractText[^>]*>(.*?)</AbstractText>", xml, re.DOTALL)
         if abstracts:
             text = " ".join(re.sub(r"<[^>]+>", "", a) for a in abstracts)
             return text[:3000]
