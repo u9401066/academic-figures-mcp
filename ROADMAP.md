@@ -13,7 +13,7 @@ This roadmap tracks the next product capabilities for Academic Figures MCP beyon
 
 ### Theme 1: Reproducibility and Retargeting
 
-Status: next
+Status: shipped (file-backed manifests, replay + retarget tooling are live)
 
 Goals:
 
@@ -23,10 +23,10 @@ Goals:
 
 Planned deliverables:
 
-- Saved job manifest per asset.
-- Prompt and prompt-pack replay flow.
-- Image-to-journal retargeting workflow.
-- Before and after journal constraint diff in metadata.
+- Saved job manifest per asset. ✅ Saved to `.academic-figures/manifests` with prompt, payload, provider, and journal metadata.
+- Prompt and prompt-pack replay flow. ✅ `replay_manifest` + `list_manifests` MCP tools allow reruns from disk without rebuilding prompts.
+- Image-to-journal retargeting workflow. ✅ `retarget_journal` injects a new profile and regenerates with a new manifest.
+- Before and after journal constraint diff in metadata. ✅ Retarget responses include a diff between the previous and new journal profiles.
 
 Mapped user requirements:
 
@@ -35,7 +35,7 @@ Mapped user requirements:
 
 ### Theme 2: Multi-Panel and Composite Figures
 
-Status: next
+Status: in progress (composite render route shipped; planning schemas next)
 
 Goals:
 
@@ -45,10 +45,10 @@ Goals:
 
 Planned deliverables:
 
-- Multi-panel figure schema in planned_payload.
-- Panel layout presets and panel-label rules.
-- Composite assembly tool or route.
-- Single-output export for montage figures.
+- Multi-panel figure schema in planned_payload. ✅ `planned_payload.panels` accepted with `render_route=composite_figure` for assembly.
+- Panel layout presets and panel-label rules. ⏳ Current assembler applies balanced columns with auto labels; presets remain planned.
+- Composite assembly tool or route. ✅ `generate_figure` now supports a composite render route; `composite_figure` tool remains for direct calls.
+- Single-output export for montage figures. ✅ Output is written as a single PNG with DPI metadata.
 
 Mapped user requirements:
 
@@ -98,9 +98,9 @@ Mapped user requirements:
 
 ## Sequencing
 
-1. Prompt persistence and replay.
-2. Journal retargeting for existing assets.
-3. Grouped figure planning and composite assembly.
+1. Prompt persistence and replay. ✅
+2. Journal retargeting for existing assets. ✅
+3. Grouped figure planning and composite assembly. ▶️ composite route shipped; grouped planning next.
 4. Poster-specific planning and export.
 5. Image-to-style extraction and reuse.
 

@@ -5,7 +5,10 @@ from __future__ import annotations
 from src.application.edit_figure import EditFigureRequest
 from src.application.evaluate_figure import EvaluateFigureRequest
 from src.application.generate_figure import GenerateFigureRequest
+from src.application.list_manifests import ListManifestsRequest
 from src.application.plan_figure import PlanFigureRequest
+from src.application.replay_manifest import ReplayManifestRequest
+from src.application.retarget_journal import RetargetJournalRequest
 from src.domain.exceptions import ConfigurationError, DomainError, ValidationError
 from src.presentation.dependencies import Container
 from src.presentation.server import mcp
@@ -14,6 +17,8 @@ from src.presentation.validation import (
     normalize_figure_type,
     normalize_image_path,
     normalize_language,
+    normalize_list_limit,
+    normalize_manifest_id,
     normalize_optional_pmid,
     normalize_output_dir,
     normalize_output_size,
@@ -229,3 +234,57 @@ def composite_figure(
         return composer.compose(normalized_output_path)
     except (ConfigurationError, ValidationError, DomainError) as exc:
         return _error_payload(exc)
+
+
+@mcp.tool()
+def replay_manifest(
+    manifest_id: str,
+    output_dir: str | None = None,
+) -> dict[str, object]:
+    """Replay a previously saved manifest using the same prompt."""
+    try:
+        normalized_id = normalize_manifest_id(manifest_id)
+        normalized_output_dir = normalize_output_dir(output_dir)
+        uc = Container.get().replay_manifest_uc()
+        return uc.execute(
+            ReplayManifestRequest(
+                manifest_id=normalized_id,
+                output_dir=normalized_output_dir,
+            )
+        )
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc, manifest_id=manifest_id)
+
+
+@mcp.tool()
+def retarget_journal(
+    manifest_id: str,
+    target_journal: str,
+    output_dir: str | None = None,
+) -> dict[str, object]:
+    """Apply a new journal profile to an existing manifest and regenerate the figure."""
+    try:
+        normalized_id = normalize_manifest_id(manifest_id)
+        normalized_target = normalize_target_journal(target_journal)
+        normalized_output_dir = normalize_output_dir(output_dir)
+        uc = Container.get().retarget_journal_uc()
+        return uc.execute(
+            RetargetJournalRequest(
+                manifest_id=normalized_id,
+                target_journal=normalized_target or "",
+                output_dir=normalized_output_dir,
+            )
+        )
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc, manifest_id=manifest_id, target_journal=target_journal)
+
+
+@mcp.tool()
+def list_manifests(limit: int = 20) -> dict[str, object]:
+    """List recent manifests for replay or retargeting."""
+    try:
+        normalized_limit = normalize_list_limit(limit)
+        uc = Container.get().list_manifests_uc()
+        return uc.execute(ListManifestsRequest(limit=normalized_limit))
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc, limit=limit)

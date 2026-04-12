@@ -27,3 +27,7 @@ class ValidationError(DomainError):
 
 class ProviderCapabilityError(DomainError):
     """Selected provider cannot perform the requested operation."""
+
+
+class ManifestNotFoundError(DomainError):
+    """Requested manifest does not exist on disk."""

@@ -8,10 +8,15 @@ from src.application.batch_generate import BatchGenerateUseCase
 from src.application.edit_figure import EditFigureUseCase
 from src.application.evaluate_figure import EvaluateFigureUseCase
 from src.application.generate_figure import GenerateFigureUseCase
+from src.application.list_manifests import ListManifestsUseCase
 from src.application.plan_figure import PlanFigureUseCase
+from src.application.replay_manifest import ReplayManifestUseCase
+from src.application.retarget_journal import RetargetJournalUseCase
 from src.domain.exceptions import ConfigurationError
+from src.infrastructure.composite import CompositeFigureAssembler
 from src.infrastructure.config import load_config
 from src.infrastructure.gemini_adapter import GeminiAdapter
+from src.infrastructure.manifest_store import FileManifestStore
 from src.infrastructure.prompt_engine import PromptEngine
 from src.infrastructure.pubmed_client import PubMedClient
 
@@ -29,6 +34,8 @@ class Container:
         self._generator: ImageGenerator | None = None
         self._fetcher: PubMedClient | None = None
         self._prompt_builder: PromptEngine | None = None
+        self._manifest_store: FileManifestStore | None = None
+        self._composer: CompositeFigureAssembler | None = None
 
     @classmethod
     def get(cls) -> Container:
@@ -64,6 +71,18 @@ class Container:
     def output_dir(self) -> str:
         return self._config.output_dir
 
+    @property
+    def manifest_store(self) -> FileManifestStore:
+        if self._manifest_store is None:
+            self._manifest_store = FileManifestStore(self._config.manifest_dir)
+        return self._manifest_store
+
+    @property
+    def composer(self) -> CompositeFigureAssembler:
+        if self._composer is None:
+            self._composer = CompositeFigureAssembler()
+        return self._composer
+
     # ── Use case factories ──────────────────────────────────
 
     def generate_figure_uc(self) -> GenerateFigureUseCase:
@@ -73,6 +92,8 @@ class Container:
             prompt_builder=self.prompt_builder,
             provider_name=self._config.gemini.provider,
             output_dir=self.output_dir,
+            manifest_store=self.manifest_store,
+            composer=self.composer,
         )
 
     def plan_figure_uc(self) -> PlanFigureUseCase:
@@ -90,3 +111,22 @@ class Container:
 
     def batch_generate_uc(self) -> BatchGenerateUseCase:
         return BatchGenerateUseCase(generate_uc=self.generate_figure_uc())
+
+    def replay_manifest_uc(self) -> ReplayManifestUseCase:
+        return ReplayManifestUseCase(
+            manifest_store=self.manifest_store,
+            generator=self.generator,
+            default_output_dir=self.output_dir,
+        )
+
+    def retarget_journal_uc(self) -> RetargetJournalUseCase:
+        return RetargetJournalUseCase(
+            manifest_store=self.manifest_store,
+            generator=self.generator,
+            prompt_builder=self.prompt_builder,
+            default_output_dir=self.output_dir,
+            provider_name=self._config.gemini.provider,
+        )
+
+    def list_manifests_uc(self) -> ListManifestsUseCase:
+        return ListManifestsUseCase(manifest_store=self.manifest_store)

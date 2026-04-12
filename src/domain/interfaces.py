@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from src.domain.entities import GenerationResult, Paper
+    from src.domain.entities import GenerationManifest, GenerationResult, Paper
 
 
 class MetadataFetcher(ABC):
@@ -66,3 +66,31 @@ class PromptBuilder(ABC):
         target_journal: str | None = None,
         source_journal: str | None = None,
     ) -> tuple[str, dict[str, object] | None]: ...
+
+
+class ManifestStore(ABC):
+    """Persists generation manifests for replay and audit."""
+
+    @abstractmethod
+    def save(self, manifest: GenerationManifest) -> GenerationManifest: ...
+
+    @abstractmethod
+    def load(self, manifest_id: str) -> GenerationManifest: ...
+
+    @abstractmethod
+    def list(self, limit: int = 20) -> list[GenerationManifest]: ...
+
+
+class FigureComposer(ABC):
+    """Assembles multi-panel figures into a single output."""
+
+    @abstractmethod
+    def compose(
+        self,
+        panels: list[dict[str, str]],
+        *,
+        title: str,
+        caption: str,
+        citation: str,
+        output_path: str | None = None,
+    ) -> dict[str, object]: ...

@@ -43,17 +43,32 @@ The system is designed as a multi-step academic workflow:
 5. Evaluate the result against academic-quality criteria.
 6. Iterate until the output is publication-grade.
 
-## 5 MCP Tools
+## MCP Tools
 
 | Tool | Input | Output |
 | ---- | ----- | ------ |
 | `plan_figure` | `pmid`, `figure_type?`, `style_preset?` | Structured plan with route, constraints, and next-step arguments |
-| `generate_figure` | `planned_payload` or compatibility `pmid` bridge | Generated asset from a generic render request |
+| `generate_figure` | `planned_payload` or compatibility `pmid` bridge | Generated asset from a generic render request (now respects `render_route=composite_figure`) |
 | `edit_figure` | `image_path`, `feedback` | Refined image via Gemini edit API |
 | `evaluate_figure` | `image_path`, `figure_type?` | 8-domain scorecard with suggestions |
 | `batch_generate` | `pmids: list`, `figure_type?` | Batch generation results |
+| `composite_figure` | `panels`, `labels`, `title`, `caption?`, `citation?` | Publication-ready multi-panel montage with labels and DPI metadata |
+| `list_manifests` | `limit?` | Recent manifest metadata for replay or retargeting |
+| `replay_manifest` | `manifest_id`, `output_dir?` | Re-run a saved manifest using the original prompt and provider |
+| `retarget_journal` | `manifest_id`, `target_journal`, `output_dir?` | Regenerate with a new journal profile plus before/after diff |
 
 `generate_figure` is now internally plan-first. If you pass a PMID directly, the server first builds a planning payload and then renders from that payload. The canonical contract remains `plan_figure` followed by `generate_figure(planned_payload=...)`.
+
+### Reproducibility & Retargeting
+
+- Every successful generation now writes a manifest to `.academic-figures/manifests` (override with `AFM_MANIFEST_DIR`).
+- `list_manifests` + `replay_manifest` let you rerun saved prompts without rebuilding the plan.
+- `retarget_journal` injects a new journal profile, regenerates, and returns a before/after diff of the profile metadata.
+
+### Multi-Panel & Composite Assembly
+
+- `planned_payload` now accepts `render_route=composite_figure` with a `panels` list to assemble montage figures.
+- The built-in `composite_figure` tool remains available for direct multi-panel assembly with labels, caption, and DPI metadata.
 
 ## Product Positioning
 
@@ -146,6 +161,7 @@ Provider examples:
 - `AFM_IMAGE_PROVIDER=google` with `GOOGLE_API_KEY`
 - `AFM_IMAGE_PROVIDER=openrouter` with `OPENROUTER_API_KEY`
 - `AFM_IMAGE_PROVIDER=ollama` with `OLLAMA_BASE_URL` and `OLLAMA_MODEL`
+- `AFM_MANIFEST_DIR=.academic-figures/manifests` to relocate persisted generation manifests
 
 ## Smoke Test
 

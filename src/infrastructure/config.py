@@ -140,6 +140,7 @@ class GeminiConfig:
 class ServerConfig:
     transport: str = "stdio"
     output_dir: str = ".academic-figures/outputs"
+    manifest_dir: str = ".academic-figures/manifests"
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
 
 
@@ -158,6 +159,7 @@ def load_config() -> ServerConfig:
         GEMINI_LOW_LATENCY_MODEL — override low-latency model name
         GEMINI_IMAGE_SIZE — "0.5K" | "1K" | "2K" | "4K"
         AFM_OUTPUT_DIR — output directory (default: .academic-figures/outputs)
+        AFM_MANIFEST_DIR — manifest directory (default: .academic-figures/manifests)
         OPENROUTER_BASE_URL — OpenRouter API base URL (default: https://openrouter.ai/api/v1)
         OPENROUTER_HTTP_REFERER — optional attribution header for OpenRouter
         OPENROUTER_APP_TITLE — optional app title header for OpenRouter
@@ -233,5 +235,6 @@ def load_config() -> ServerConfig:
     return ServerConfig(
         transport=transport,
         output_dir=os.environ.get("AFM_OUTPUT_DIR", ".academic-figures/outputs"),
+        manifest_dir=os.environ.get("AFM_MANIFEST_DIR", ".academic-figures/manifests"),
         gemini=gemini,
     )

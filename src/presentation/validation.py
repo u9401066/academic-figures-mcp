@@ -13,6 +13,7 @@ _LANGUAGE_PATTERN = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
 _OUTPUT_SIZE_PATTERN = re.compile(r"^(?P<width>\d{2,5})x(?P<height>\d{2,5})$")
 _SUPPORTED_FIGURE_TYPES = frozenset({"auto", *FIGURE_TYPE_TO_TEMPLATE.keys()})
 _MAX_BATCH_PMIDS = 25
+_MAX_LIST_LIMIT = 200
 
 
 def normalize_pmid(value: str, *, field_name: str = "pmid") -> str:
@@ -132,3 +133,20 @@ def normalize_pmids(values: list[str]) -> list[str]:
         unique.append(pmid)
         seen.add(pmid)
     return unique
+
+
+def normalize_manifest_id(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValidationError("manifest_id is required")
+    if len(normalized) > 200:
+        raise ValidationError("manifest_id is too long")
+    return normalized
+
+
+def normalize_list_limit(value: int) -> int:
+    if value <= 0:
+        raise ValidationError("limit must be positive")
+    if value > _MAX_LIST_LIMIT:
+        raise ValidationError(f"limit cannot exceed {_MAX_LIST_LIMIT}")
+    return value

@@ -8,6 +8,9 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ### Added
 
+- Persisted generation manifests to `.academic-figures/manifests` with MCP tools for listing, replay, and journal retargeting (with before/after profile diffs).
+- Added a composite render route so `generate_figure` can assemble `planned_payload.panels` into a single DPI-stamped montage.
+- Added `AFM_MANIFEST_DIR` environment variable to relocate manifest storage.
 - Added [ROADMAP.md](ROADMAP.md) to formalize the next capability tracks for posters, grouped figures, composite montage outputs, journal retargeting, prompt retention, and style extraction.
 - Added this [CHANGELOG.md](CHANGELOG.md) so product and engineering changes are tracked in-repo instead of only living in Memory Bank notes.
 - Added [scripts/start_afm_local.py](scripts/start_afm_local.py) as a cross-platform local launcher for Windows, macOS, and Linux.
