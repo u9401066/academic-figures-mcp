@@ -15,6 +15,7 @@ This implements the "分而治之" strategy:
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -73,19 +74,25 @@ class PanelSpec:
         self.panel_type = panel_type  # "anatomy" | "ultrasound" | "chart" | "comparison"
 
 
+@dataclass
+class _PanelEntry:
+    panel: PanelSpec
+    image_path: str
+
+
 class CompositeFigure:
     """Builds a publication-ready multi-panel figure."""
 
     def __init__(self, config: LayoutConfig | None = None):
         self.config = config or LayoutConfig()
-        self.panels: list[dict[str, object]] = []
+        self.panels: list[_PanelEntry] = []
         self.title = ""
         self.caption = ""
         self.citation = ""
 
     def add_panel(self, spec: PanelSpec, image_path: str) -> CompositeFigure:
         """Add a panel image to the composition."""
-        self.panels.append({"panel": spec, "image_path": image_path})
+        self.panels.append(_PanelEntry(panel=spec, image_path=image_path))
         return self
 
     def set_title(self, title: str) -> CompositeFigure:
@@ -160,7 +167,7 @@ class CompositeFigure:
         if self.title:
             font = self.get_font(cfg.TITLE_SIZE)
             bbox = draw.textbbox((0, 0), self.title, font=font)
-            title_h = bbox[3] - bbox[1] + 20
+            title_h = int(bbox[3] - bbox[1] + 20)
             draw.text(
                 ((cfg.WIDTH - (bbox[2] - bbox[0])) // 2, cfg.MARGIN_TOP),
                 self.title,
@@ -190,17 +197,17 @@ class CompositeFigure:
 
             # Load and resize panel image
             try:
-                panel_img = Image.open(ps["image_path"])
-                panel_img = panel_img.resize((w, h), Image.LANCZOS)
-                canvas.paste(panel_img, (x, y))
+                with Image.open(ps.image_path) as panel_image:
+                    resized_image = panel_image.resize((w, h), Image.Resampling.LANCZOS)
+                    canvas.paste(resized_image, (x, y))
             except Exception as e:
                 print(f"Warning: Failed to load panel image: {e}")
                 # Draw placeholder
                 draw.rectangle([x, y, x + w, y + h], fill="#F0F0F0")
 
             # Panel label (A, B, C)
-            if ps["panel"].label:
-                label = ps["panel"].label
+            if ps.panel.label:
+                label = ps.panel.label
                 label_font = self.get_font(cfg.LABEL_FONT_SIZE)
                 self._draw_label(draw, label, x + 15, y + 15, cfg, label_font)
 

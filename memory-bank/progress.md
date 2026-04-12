@@ -1,4 +1,4 @@
-# Progress (Updated: 2026-04-11)
+# Progress (Updated: 2026-04-12)
 
 ## Done
 
@@ -21,6 +21,7 @@
 ## Doing
 
 - Maintaining the current generic renderer plus journal-registry baseline while prioritizing the next roadmap capabilities around posters, grouped figures, composites, prompt retention, and style reuse.
+- Recovering post-merge CI for PR #2 by fixing composite typing issues, repository-level Ruff failures, and Bandit findings in prompt loading and PubMed fetching.
 
 ## Next
 

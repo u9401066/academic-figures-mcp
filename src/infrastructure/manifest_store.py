@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import builtins
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.domain.entities import GenerationManifest
 from src.domain.exceptions import ManifestNotFoundError
 from src.domain.interfaces import ManifestStore
+
+if TYPE_CHECKING:
+    import builtins
 
 
 class FileManifestStore(ManifestStore):
