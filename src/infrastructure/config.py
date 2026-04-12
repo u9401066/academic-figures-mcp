@@ -159,6 +159,7 @@ def load_config() -> ServerConfig:
         GEMINI_LOW_LATENCY_MODEL — override low-latency model name
         GEMINI_IMAGE_SIZE — "0.5K" | "1K" | "2K" | "4K"
         AFM_OUTPUT_DIR — output directory (default: .academic-figures/outputs)
+        AFM_MANIFEST_DIR — manifest directory (default: .academic-figures/manifests)
         OPENROUTER_BASE_URL — OpenRouter API base URL (default: https://openrouter.ai/api/v1)
         OPENROUTER_HTTP_REFERER — optional attribution header for OpenRouter
         OPENROUTER_APP_TITLE — optional app title header for OpenRouter
