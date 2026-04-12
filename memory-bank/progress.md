@@ -17,11 +17,13 @@
 - Generated repo-owned README visuals through the local MCP workflow and saved curated payloads, output images, and QA reports under .academic-figures/.
 - Iterated the workflow figure to a stricter v2 so the duplicated Payload step was removed and the main flow is now unambiguous.
 - Updated README.md to embed the generated visuals, link their QA reports, and explicitly document that both the images and reviews are self-generated through this repository.
+- Recovered the post-merge PR #2 CI regressions by fixing composite typing, root-level Ruff violations, prompt-loader exception handling, and PubMed HTTP fetching.
+- Added isolated unit coverage for PubMed metadata parsing and failure wrapping.
+- Validated the repaired branch with Ruff, Ruff format, mypy, Bandit, and pytest (30 passed).
 
 ## Doing
 
 - Maintaining the current generic renderer plus journal-registry baseline while prioritizing the next roadmap capabilities around posters, grouped figures, composites, prompt retention, and style reuse.
-- Recovering post-merge CI for PR #2 by fixing composite typing issues, repository-level Ruff failures, and Bandit findings in prompt loading and PubMed fetching.
 
 ## Next
 

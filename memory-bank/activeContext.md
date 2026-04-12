@@ -9,8 +9,8 @@
 - The VS Code extension branding assets are being synchronized so icon.svg stays consistent with the new PNG icon.
 - The repository is now using its own MCP generate/evaluate workflow to create README-facing introduction, architecture, and workflow visuals, with the workflow diagram iterated to a stricter v2.
 - Current planning focus is to prioritize implementation for poster generation, grouped figures, composite montage output, journal retargeting for an existing image, prompt retention for replay, and style-to-prompt extraction.
-- Current delivery focus is CI recovery after PR #2 merge: clear Ruff, mypy, and Bandit failures, verify manifest/composite flows still behave correctly, and re-run the existing validation suite to green.
+- The immediate CI recovery after PR #2 merge is complete locally: Ruff, format, mypy, Bandit, and pytest all pass after composite typing and PubMed transport hardening.
 
 ## Current Blockers
 
-- Local validation requires bootstrapping `uv` in the sandbox before the standard repo checks can run.
+- No active blockers.
