@@ -8,7 +8,10 @@ from src.application.batch_generate import BatchGenerateUseCase
 from src.application.edit_figure import EditFigureUseCase
 from src.application.evaluate_figure import EvaluateFigureUseCase
 from src.application.generate_figure import GenerateFigureUseCase
+from src.application.list_manifests import ListManifestsUseCase
 from src.application.plan_figure import PlanFigureUseCase
+from src.application.replay_manifest import ReplayManifestUseCase
+from src.application.retarget_journal import RetargetJournalUseCase
 from src.domain.exceptions import ConfigurationError
 from src.infrastructure.config import load_config
 from src.infrastructure.gemini_adapter import GeminiAdapter
@@ -99,3 +102,22 @@ class Container:
 
     def batch_generate_uc(self) -> BatchGenerateUseCase:
         return BatchGenerateUseCase(generate_uc=self.generate_figure_uc())
+
+    def replay_manifest_uc(self) -> ReplayManifestUseCase:
+        return ReplayManifestUseCase(
+            manifest_store=self.manifest_store,
+            generator=self.generator,
+            default_output_dir=self.output_dir,
+        )
+
+    def retarget_journal_uc(self) -> RetargetJournalUseCase:
+        return RetargetJournalUseCase(
+            manifest_store=self.manifest_store,
+            generator=self.generator,
+            prompt_builder=self.prompt_builder,
+            default_output_dir=self.output_dir,
+            provider_name=self._config.gemini.provider,
+        )
+
+    def list_manifests_uc(self) -> ListManifestsUseCase:
+        return ListManifestsUseCase(manifest_store=self.manifest_store)

@@ -4,6 +4,9 @@ from typing import TYPE_CHECKING, cast
 
 from src.presentation import tools
 from src.presentation.dependencies import Container
+from src.application.replay_manifest import ReplayManifestRequest
+from src.application.retarget_journal import RetargetJournalRequest
+from src.application.list_manifests import ListManifestsRequest
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
@@ -88,3 +91,74 @@ def test_composite_figure_rejects_mismatched_labels() -> None:
 
     assert result["status"] == "error"
     assert "same length" in str(result["error"])
+
+
+def test_replay_manifest_passes_request(monkeypatch: MonkeyPatch) -> None:
+    class StubUseCase:
+        def __init__(self) -> None:
+            self.request: object | None = None
+
+        def execute(self, req: object) -> dict[str, str]:
+            self.request = req
+            return {"status": "ok", "manifest_id": "abc"}
+
+    class StubContainer:
+        def __init__(self) -> None:
+            self.uc = StubUseCase()
+
+        def replay_manifest_uc(self) -> StubUseCase:
+            return self.uc
+
+    container = StubContainer()
+    monkeypatch.setattr(Container, "get", lambda: container)
+
+    result = tools.replay_manifest(manifest_id="abc", output_dir="out")
+
+    assert result["status"] == "ok"
+    assert isinstance(container.uc.request, ReplayManifestRequest)
+    assert container.uc.request.manifest_id == "abc"
+    assert container.uc.request.output_dir == "out"
+
+
+def test_retarget_journal_passes_request(monkeypatch: MonkeyPatch) -> None:
+    class StubUseCase:
+        def __init__(self) -> None:
+            self.request: object | None = None
+
+        def execute(self, req: object) -> dict[str, str]:
+            self.request = req
+            return {"status": "ok", "manifest_id": "xyz"}
+
+    class StubContainer:
+        def __init__(self) -> None:
+            self.uc = StubUseCase()
+
+        def retarget_journal_uc(self) -> StubUseCase:
+            return self.uc
+
+    container = StubContainer()
+    monkeypatch.setattr(Container, "get", lambda: container)
+
+    result = tools.retarget_journal(manifest_id="xyz", target_journal="Nature")
+
+    assert result["status"] == "ok"
+    assert isinstance(container.uc.request, RetargetJournalRequest)
+    assert container.uc.request.manifest_id == "xyz"
+    assert container.uc.request.target_journal == "Nature"
+
+
+def test_list_manifests_validates_limit(monkeypatch: MonkeyPatch) -> None:
+    class StubUseCase:
+        def execute(self, req: object) -> dict[str, str]:
+            assert isinstance(req, ListManifestsRequest)
+            return {"status": "ok"}
+
+    class StubContainer:
+        def list_manifests_uc(self) -> StubUseCase:
+            return StubUseCase()
+
+    monkeypatch.setattr(Container, "get", lambda: StubContainer())
+
+    result = tools.list_manifests(limit=5)
+
+    assert result["status"] == "ok"
