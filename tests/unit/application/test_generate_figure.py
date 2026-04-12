@@ -91,6 +91,30 @@ class StubManifestStore(ManifestStore):
         return self.saved[:limit]
 
 
+class StubComposer:
+    def __init__(self, output_dir: Path) -> None:
+        self.output_dir = output_dir
+        self.calls: list[dict[str, object]] = []
+
+    def compose(
+        self,
+        panels: list[dict[str, str]],
+        *,
+        title: str,
+        caption: str,
+        citation: str,
+        output_path: str | None = None,
+    ) -> dict[str, object]:
+        self.calls.append({"panels": panels, "title": title, "caption": caption, "citation": citation})
+        out_path = Path(output_path or (self.output_dir / "composite.png"))
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(b"composite")
+        return {
+            "status": "success",
+            "output_path": str(out_path),
+        }
+
+
 class BridgePromptBuilder(PromptBuilder):
     def __init__(self) -> None:
         self.build_calls = 0
@@ -246,3 +270,39 @@ def test_generate_figure_persists_manifest(tmp_path: Path) -> None:
     assert manifest.prompt.startswith("## Block 1")
     assert manifest.prompt_base.startswith("## Block 1")
     assert manifest.render_route_used == "image_generation"
+
+
+def test_generate_figure_handles_composite_render_route(tmp_path: Path) -> None:
+    generator = StubGenerator()
+    prompt_builder = StubPromptBuilder()
+    manifest_store = StubManifestStore()
+    composer = StubComposer(tmp_path)
+    use_case = GenerateFigureUseCase(
+        fetcher=FailFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        output_dir=str(tmp_path),
+        manifest_store=manifest_store,
+        composer=composer,
+    )
+
+    payload = {
+        "asset_kind": "academic_figure",
+        "title": "Composite Assembly",
+        "selected_figure_type": "infographic",
+        "render_route": "composite_figure",
+        "panels": [
+            {"image_path": str(tmp_path / "panel-a.png"), "label": "A", "panel_type": "chart"},
+            {"image_path": str(tmp_path / "panel-b.png"), "label": "B", "panel_type": "anatomy"},
+        ],
+    }
+
+    result = use_case.execute(
+        GenerateFigureRequest(planned_payload=payload, output_dir=str(tmp_path))
+    )
+
+    assert result["status"] == "ok"
+    assert result["render_route_used"] == "composite_figure"
+    assert composer.calls
+    assert manifest_store.saved
+    assert generator.prompt == ""

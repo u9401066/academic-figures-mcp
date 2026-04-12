@@ -19,6 +19,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from src.domain.interfaces import FigureComposer
+
 # ─── Layout Config ──────────────────────────────────────────────
 
 
@@ -268,3 +270,35 @@ class CompositeFigure:
             fill=cfg.LABEL_COLOR,
             font=font,
         )
+
+
+class CompositeFigureAssembler(FigureComposer):
+    """Adapter to expose CompositeFigure through the FigureComposer interface."""
+
+    def __init__(self, config: LayoutConfig | None = None) -> None:
+        self._config = config or LayoutConfig()
+
+    def compose(
+        self,
+        panels: list[dict[str, str]],
+        *,
+        title: str,
+        caption: str,
+        citation: str,
+        output_path: str | None = None,
+    ) -> dict[str, object]:
+        composer = CompositeFigure(config=self._config)
+        for panel in panels:
+            composer.add_panel(
+                PanelSpec(
+                    prompt=panel.get("prompt", "composite panel"),
+                    label=panel.get("label", ""),
+                    panel_type=panel.get("panel_type", "anatomy"),
+                ),
+                panel["image_path"],
+            )
+
+        composer.set_title(title)
+        composer.set_caption(caption)
+        composer.set_citation(citation)
+        return composer.compose(output_path)

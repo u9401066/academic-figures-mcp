@@ -15,6 +15,7 @@ from src.application.retarget_journal import RetargetJournalUseCase
 from src.domain.exceptions import ConfigurationError
 from src.infrastructure.config import load_config
 from src.infrastructure.gemini_adapter import GeminiAdapter
+from src.infrastructure.composite import CompositeFigureAssembler
 from src.infrastructure.manifest_store import FileManifestStore
 from src.infrastructure.prompt_engine import PromptEngine
 from src.infrastructure.pubmed_client import PubMedClient
@@ -34,6 +35,7 @@ class Container:
         self._fetcher: PubMedClient | None = None
         self._prompt_builder: PromptEngine | None = None
         self._manifest_store: FileManifestStore | None = None
+        self._composer: CompositeFigureAssembler | None = None
 
     @classmethod
     def get(cls) -> Container:
@@ -75,6 +77,12 @@ class Container:
             self._manifest_store = FileManifestStore(self._config.manifest_dir)
         return self._manifest_store
 
+    @property
+    def composer(self) -> CompositeFigureAssembler:
+        if self._composer is None:
+            self._composer = CompositeFigureAssembler()
+        return self._composer
+
     # ── Use case factories ──────────────────────────────────
 
     def generate_figure_uc(self) -> GenerateFigureUseCase:
@@ -85,6 +93,7 @@ class Container:
             provider_name=self._config.gemini.provider,
             output_dir=self.output_dir,
             manifest_store=self.manifest_store,
+            composer=self.composer,
         )
 
     def plan_figure_uc(self) -> PlanFigureUseCase:

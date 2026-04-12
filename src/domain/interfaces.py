@@ -79,3 +79,18 @@ class ManifestStore(ABC):
 
     @abstractmethod
     def list(self, limit: int = 20) -> list[GenerationManifest]: ...
+
+
+class FigureComposer(ABC):
+    """Assembles multi-panel figures into a single output."""
+
+    @abstractmethod
+    def compose(
+        self,
+        panels: list[dict[str, str]],
+        *,
+        title: str,
+        caption: str,
+        citation: str,
+        output_path: str | None = None,
+    ) -> dict[str, object]: ...

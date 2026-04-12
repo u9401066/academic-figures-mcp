@@ -15,7 +15,13 @@ from src.domain.entities import GenerationManifest
 
 if TYPE_CHECKING:
     from src.domain.entities import GenerationResult
-    from src.domain.interfaces import ImageGenerator, ManifestStore, MetadataFetcher, PromptBuilder
+    from src.domain.interfaces import (
+        FigureComposer,
+        ImageGenerator,
+        ManifestStore,
+        MetadataFetcher,
+        PromptBuilder,
+    )
 
 
 PMID_COMPATIBILITY_WARNING = (
@@ -44,6 +50,7 @@ class GenerateFigureUseCase:
         provider_name: str = "google",
         output_dir: str = ".academic-figures/outputs",
         manifest_store: ManifestStore | None = None,
+        composer: FigureComposer | None = None,
     ) -> None:
         self._fetcher = fetcher
         self._generator = generator
@@ -51,6 +58,7 @@ class GenerateFigureUseCase:
         self._provider_name = provider_name
         self._output_dir = output_dir
         self._manifest_store = manifest_store
+        self._composer = composer
 
     def execute(self, req: GenerateFigureRequest) -> dict[str, object]:
         if req.planned_payload is not None:
@@ -132,9 +140,10 @@ class GenerateFigureUseCase:
             or (req.figure_type if req.figure_type != "auto" else "infographic")
         )
         requested_render_route = self._as_text(payload.get("render_route")) or "image_generation"
-        render_route = requested_render_route
+        supported_render_routes = {"image_generation", "composite_figure", "layout_assemble_composite"}
+        render_route = requested_render_route if requested_render_route in supported_render_routes else "image_generation"
         warnings: list[str] = []
-        if requested_render_route != "image_generation":
+        if requested_render_route not in supported_render_routes:
             render_route = "image_generation"
             warnings.append(
                 f"render_route '{requested_render_route}' is not implemented yet; "
@@ -144,6 +153,29 @@ class GenerateFigureUseCase:
         language = self._as_text(payload.get("language")) or req.language
         output_size = self._as_text(payload.get("output_size")) or req.output_size
         title = self._resolve_title(payload=payload, asset_kind=asset_kind)
+        source_context_dict = self._as_dict(payload.get("source_context")) or {}
+        payload_target_journal = self._as_text(payload.get("target_journal"))
+        target_journal = req.target_journal or payload_target_journal
+        source_journal = self._as_text(source_context_dict.get("journal"))
+        payload_journal_profile = self._as_dict(payload.get("journal_profile"))
+
+        composite_result = self._execute_composite_payload(
+            payload=payload,
+            asset_kind=asset_kind,
+            figure_type=figure_type,
+            requested_render_route=requested_render_route,
+            language=language,
+            output_size=output_size,
+            title=title,
+            source_context=source_context_dict,
+            target_journal=target_journal,
+            warnings=warnings,
+            output_dir=req.output_dir,
+            start=start,
+        )
+        if composite_result is not None:
+            return composite_result
+
         prompt_base = self._resolve_planned_prompt(
             payload=payload,
             title=title,
@@ -152,11 +184,6 @@ class GenerateFigureUseCase:
             language=language,
             output_size=output_size,
         )
-        source_context_dict = self._as_dict(payload.get("source_context")) or {}
-        payload_target_journal = self._as_text(payload.get("target_journal"))
-        target_journal = req.target_journal or payload_target_journal
-        source_journal = self._as_text(source_context_dict.get("journal"))
-        payload_journal_profile = self._as_dict(payload.get("journal_profile"))
         should_inject_journal = payload_journal_profile is None or (
             req.target_journal is not None and req.target_journal != payload_target_journal
         )
@@ -240,6 +267,175 @@ class GenerateFigureUseCase:
             "warnings": warnings,
             "manifest_id": manifest_id,
         }
+
+    def _execute_composite_payload(
+        self,
+        *,
+        payload: dict[str, Any],
+        asset_kind: str,
+        figure_type: str,
+        requested_render_route: str,
+        language: str,
+        output_size: str,
+        title: str,
+        source_context: dict[str, Any],
+        target_journal: str | None,
+        warnings: list[str],
+        output_dir: str | None,
+        start: float,
+    ) -> dict[str, object] | None:
+        if not self._is_composite_payload(payload, requested_render_route):
+            return None
+        if self._composer is None:
+            warnings.append(
+                f"render_route '{requested_render_route}' requested multi-panel assembly "
+                "but no composer is configured; falling back to image generation"
+            )
+            return None
+
+        panels = self._normalize_panels(payload.get("panels"))
+        if panels is None:
+            warnings.append(
+                "panels must contain [image_path, label, panel_type] objects for composite assembly"
+            )
+            return None
+
+        caption = self._as_text(payload.get("caption"))
+        citation = self._as_text(payload.get("citation"))
+        normalized_title = title or "Composite figure"
+        normalized_render_route = "composite_figure"
+
+        base_dir = Path(output_dir or self._output_dir)
+        base_dir.mkdir(parents=True, exist_ok=True)
+        out_path = base_dir / f"{self._slugify(normalized_title)}_composite_{int(time.time())}.png"
+        compose_result = self._composer.compose(
+            panels=panels,
+            title=normalized_title,
+            caption=caption,
+            citation=citation,
+            output_path=str(out_path),
+        )
+        if compose_result.get("status") not in {"success", "ok"}:
+            return {
+                "status": "generation_failed",
+                "generation_contract": "composite_render",
+                "asset_kind": asset_kind,
+                "title": normalized_title,
+                "figure_type": figure_type,
+                "render_route_requested": requested_render_route,
+                "render_route_used": normalized_render_route,
+                "target_journal": target_journal,
+                "error": compose_result.get("error", "Composite assembly failed"),
+                "warnings": warnings,
+            }
+
+        manifest_prompt = self._build_composite_prompt(
+            title=normalized_title,
+            panels=panels,
+            caption=caption,
+            citation=citation,
+            language=language,
+            output_size=output_size,
+        )
+        manifest_id = self._persist_manifest(
+            payload=payload,
+            prompt=manifest_prompt,
+            prompt_base=manifest_prompt,
+            asset_kind=asset_kind or "multi_panel_figure",
+            figure_type=figure_type or "composite",
+            language=language,
+            output_size=output_size,
+            requested_render_route=requested_render_route,
+            render_route=normalized_render_route,
+            target_journal=target_journal,
+            journal_profile=None,
+            source_context=source_context,
+            output_path=str(out_path),
+            model="composite-assembler",
+            warnings=warnings,
+        )
+
+        output_path = str(compose_result.get("output_path") or out_path)
+        image_size = Path(output_path).stat().st_size if Path(output_path).exists() else 0
+        return {
+            "status": "ok",
+            "generation_contract": "composite_render",
+            "asset_kind": asset_kind or "multi_panel_figure",
+            "title": normalized_title,
+            "figure_type": figure_type,
+            "render_route_requested": requested_render_route,
+            "render_route_used": normalized_render_route,
+            "target_journal": target_journal,
+            "journal_profile": None,
+            "source_context": source_context,
+            "model": "composite-assembler",
+            "output_path": output_path,
+            "media_type": "image/png",
+            "image_size_bytes": image_size,
+            "prompt_blocks": 1,
+            "prompt_length": len(manifest_prompt),
+            "elapsed_seconds": round(time.time() - start, 2),
+            "warnings": warnings,
+            "manifest_id": manifest_id,
+        }
+
+    def _is_composite_payload(self, payload: dict[str, Any], requested_render_route: str) -> bool:
+        panels = payload.get("panels")
+        if isinstance(panels, list) and len(panels) > 0:
+            return True
+        return requested_render_route in {"composite_figure", "layout_assemble_composite"}
+
+    def _normalize_panels(self, raw_panels: object) -> list[dict[str, str]] | None:
+        if not isinstance(raw_panels, list) or not raw_panels:
+            return None
+
+        normalized: list[dict[str, str]] = []
+        for index, item in enumerate(raw_panels):
+            if not isinstance(item, dict):
+                return None
+            image_path = self._as_text(item.get("image_path")) or self._as_text(item.get("path"))
+            label = self._as_text(item.get("label")) or self._default_label(index)
+            panel_type = self._as_text(item.get("panel_type")) or "anatomy"
+            if not image_path or not label:
+                return None
+            normalized.append(
+                {
+                    "image_path": image_path,
+                    "label": label,
+                    "panel_type": panel_type,
+                    "prompt": self._as_text(item.get("prompt")) or "composite panel",
+                }
+            )
+        return normalized
+
+    @staticmethod
+    def _build_composite_prompt(
+        *,
+        title: str,
+        panels: list[dict[str, str]],
+        caption: str,
+        citation: str,
+        language: str,
+        output_size: str,
+    ) -> str:
+        lines = [
+            f"Composite figure title: {title}",
+            f"language: {language}",
+            f"output_size: {output_size}",
+            f"caption: {caption}" if caption else "caption: none",
+            f"citation: {citation}" if citation else "citation: none",
+            "panels:",
+        ]
+        for panel in panels:
+            lines.append(
+                f"- {panel.get('label')}: {panel.get('image_path')} [{panel.get('panel_type')}]"
+            )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _default_label(index: int) -> str:
+        base = ord("A") + index
+        return chr(base) if 0 <= base <= ord("Z") else f"P{index+1}"
 
     def _resolve_title(self, *, payload: dict[str, Any], asset_kind: str) -> str:
         source_context = payload.get("source_context")
