@@ -29,6 +29,31 @@ from src.domain.value_objects import (
     PanelLabelStyle,
 )
 
+# ─── Type coercion helpers ──────────────────────────────────────
+
+
+def _safe_int(value: object, default: int = 0) -> int:
+    """Coerce a value from ``dict[str, object]`` to int safely."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(str(value))
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(value: object, default: float = 0.0) -> float:
+    """Coerce a value from ``dict[str, object]`` to float safely."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value))
+    except (ValueError, TypeError):
+        return default
+
+
 # ─── Layout Config ──────────────────────────────────────────────
 
 
@@ -109,10 +134,8 @@ def _resolve_grid(
     """Return ``(columns, rows)`` for a given preset and panel count."""
     if preset_name and preset_name in LAYOUT_PRESET_CONFIGS:
         cfg = LAYOUT_PRESET_CONFIGS[preset_name]
-        cols_raw = cfg.get("columns", -1)
-        rows_raw = cfg.get("rows", -1)
-        cols = int(str(cols_raw))
-        rows = int(str(rows_raw))
+        cols = _safe_int(cfg.get("columns"), -1)
+        rows = _safe_int(cfg.get("rows"), -1)
         if cols > 0 and rows > 0:
             return cols, rows
         if cols > 0:
@@ -342,7 +365,7 @@ class CompositeFigure:
         cfg: LayoutConfig,
     ) -> None:
         preset = LAYOUT_PRESET_CONFIGS.get(LayoutPreset.ASYMMETRIC_LEFT, {})
-        weight_left = float(str(preset.get("weight_left", 0.6)))
+        weight_left = _safe_float(preset.get("weight_left"), 0.6)
         left_w = int(usable_w * weight_left) - cfg.PANEL_GAP // 2
         right_w = usable_w - left_w - cfg.PANEL_GAP
 
@@ -373,7 +396,7 @@ class CompositeFigure:
         cfg: LayoutConfig,
     ) -> None:
         preset = LAYOUT_PRESET_CONFIGS.get(LayoutPreset.SINGLE_FEATURED, {})
-        feat_ratio = float(str(preset.get("featured_height_ratio", 0.5)))
+        feat_ratio = _safe_float(preset.get("featured_height_ratio"), 0.5)
         featured_h = int(usable_h * feat_ratio) - cfg.PANEL_GAP // 2
         bottom_h = usable_h - featured_h - cfg.PANEL_GAP
 

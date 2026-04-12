@@ -22,6 +22,18 @@ if TYPE_CHECKING:
     from src.domain.interfaces import ImageGenerator, ManifestStore, MetadataFetcher, PromptBuilder
 
 
+def _safe_int(value: object, default: int = 0) -> int:
+    """Coerce a value from ``dict[str, object]`` to int safely."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(str(value))
+    except (ValueError, TypeError):
+        return default
+
+
 @dataclass
 class PlanPosterRequest:
     pmid: str
@@ -282,9 +294,9 @@ class GeneratePosterUseCase:
             layout_preset,
             POSTER_LAYOUT_CONFIGS[PosterLayoutPreset.PORTRAIT_A0],
         )
-        width_px = int(str(preset_cfg.get("width_px", 3360)))
-        height_px = int(str(preset_cfg.get("height_px", 4752)))
-        dpi = int(str(preset_cfg.get("dpi", 300)))
+        width_px = _safe_int(preset_cfg.get("width_px"), 3360)
+        height_px = _safe_int(preset_cfg.get("height_px"), 4752)
+        dpi = _safe_int(preset_cfg.get("dpi"), 300)
 
         # Add large-canvas export rules to prompt
         prompt += (
@@ -392,6 +404,11 @@ def _default_poster_sections(abstract: str) -> list[dict[str, str]]:
 
 
 def _slugify(value: str) -> str:
-    cleaned = "".join(ch.lower() if ch.isalnum() else "_" for ch in value)
+    """Create a filesystem-safe slug.  Keeps ASCII alphanumerics only."""
+    import unicodedata
+
+    nfkd = unicodedata.normalize("NFKD", value)
+    ascii_only = nfkd.encode("ascii", "ignore").decode("ascii")
+    cleaned = "".join(ch.lower() if ch.isalnum() else "_" for ch in ascii_only)
     cleaned = "_".join(part for part in cleaned.split("_") if part)
     return cleaned or "poster"

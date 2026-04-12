@@ -32,6 +32,13 @@ def test_extract_hex_colors_finds_all_unique() -> None:
     assert colors == ["#FF0000", "#00FF00"]
 
 
+def test_extract_hex_colors_expands_shorthand() -> None:
+    text = "Short: #FFF and #ABC"
+    colors = _extract_hex_colors(text)
+    assert "#FFFFFF" in colors
+    assert "#AABBCC" in colors
+
+
 def test_extract_section_returns_content() -> None:
     text = "TYPOGRAPHY: Sans-serif bold headings\nLAYOUT: Grid-based"
     result = _extract_section(text, "TYPOGRAPHY")

@@ -199,17 +199,20 @@ def _parse_style_profile(
 
 def _extract_section(text: str, header: str) -> str:
     """Pull the text following *header:* until the next header or end."""
-    pattern = rf"(?i){re.escape(header)}\s*[:\-—]\s*(.+?)(?=\n[A-Z]{{2,}}|\Z)"
+    pattern = rf"(?i){re.escape(header)}\s*[:\-—]\s*(.+?)(?=\n[A-Za-z][A-Za-z \-]{{1,}}[:\-—]|\Z)"
     m = re.search(pattern, text, re.DOTALL)
     return m.group(1).strip() if m else ""
 
 
 def _extract_hex_colors(text: str) -> list[str]:
-    """Find unique hex colour codes in *text*."""
-    matches = re.findall(r"#[0-9A-Fa-f]{6}", text)
+    """Find unique hex colour codes in *text* (supports #RGB and #RRGGBB)."""
+    matches = re.findall(r"#[0-9A-Fa-f]{3}(?:[0-9A-Fa-f]{3})?", text)
     seen: set[str] = set()
     result: list[str] = []
     for c in matches:
+        # Expand 3-digit to 6-digit
+        if len(c) == 4:
+            c = f"#{c[1]*2}{c[2]*2}{c[3]*2}"
         upper = c.upper()
         if upper not in seen:
             seen.add(upper)
