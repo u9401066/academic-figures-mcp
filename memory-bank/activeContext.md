@@ -9,7 +9,8 @@
 - The VS Code extension branding assets are being synchronized so icon.svg stays consistent with the new PNG icon.
 - The repository is now using its own MCP generate/evaluate workflow to create README-facing introduction, architecture, and workflow visuals, with the workflow diagram iterated to a stricter v2.
 - Current planning focus is to prioritize implementation for poster generation, grouped figures, composite montage output, journal retargeting for an existing image, prompt retention for replay, and style-to-prompt extraction.
+- The immediate CI recovery after PR #2 merge is complete locally: Ruff, format, mypy, Bandit, and pytest all pass after composite typing and PubMed transport hardening.
 
 ## Current Blockers
 
-- No active blockers. The current renderer and journal-registry flow are stable; the open work is roadmap prioritization and later implementation of the newly captured capabilities.
+- No active blockers.

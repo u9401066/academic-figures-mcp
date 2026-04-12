@@ -142,9 +142,7 @@ class GenerationManifest:
             generation_contract=str(data.get("generation_contract") or "planned_payload"),
             created_at=created_at,
             parent_manifest_id=(
-                str(data["parent_manifest_id"]).strip()
-                if data.get("parent_manifest_id")
-                else None
+                str(data["parent_manifest_id"]).strip() if data.get("parent_manifest_id") else None
             ),
             warnings=[str(item) for item in warnings] if isinstance(warnings, list) else [],
         )

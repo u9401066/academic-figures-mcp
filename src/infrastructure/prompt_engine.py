@@ -94,7 +94,7 @@ class PromptEngine(PromptBuilder):
             self._load_templates()
             self._load_color_standards()
             self._load_journal_standards()
-        except Exception:
+        except OSError:
             pass  # templates are optional — prompts degrade gracefully
 
     def _load_templates(self) -> None:
