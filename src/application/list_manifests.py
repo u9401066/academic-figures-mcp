@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.domain.entities import GenerationManifest
-from src.domain.interfaces import ManifestStore
+if TYPE_CHECKING:
+    from src.domain.entities import GenerationManifest
+    from src.domain.interfaces import ManifestStore
 
 
 @dataclass

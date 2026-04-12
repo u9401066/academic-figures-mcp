@@ -5,11 +5,14 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from src.domain.entities import GenerationManifest, GenerationResult
-from src.domain.interfaces import ImageGenerator, ManifestStore
+from src.domain.entities import GenerationManifest
+
+if TYPE_CHECKING:
+    from src.domain.entities import GenerationResult
+    from src.domain.interfaces import ImageGenerator, ManifestStore
 
 
 @dataclass

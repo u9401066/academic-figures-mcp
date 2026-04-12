@@ -140,8 +140,16 @@ class GenerateFigureUseCase:
             or (req.figure_type if req.figure_type != "auto" else "infographic")
         )
         requested_render_route = self._as_text(payload.get("render_route")) or "image_generation"
-        supported_render_routes = {"image_generation", "composite_figure", "layout_assemble_composite"}
-        render_route = requested_render_route if requested_render_route in supported_render_routes else "image_generation"
+        supported_render_routes = {
+            "image_generation",
+            "composite_figure",
+            "layout_assemble_composite",
+        }
+        render_route = (
+            requested_render_route
+            if requested_render_route in supported_render_routes
+            else "image_generation"
+        )
         warnings: list[str] = []
         if requested_render_route not in supported_render_routes:
             render_route = "image_generation"
@@ -296,7 +304,8 @@ class GenerateFigureUseCase:
         panels = self._normalize_panels(payload.get("panels"))
         if panels is None:
             warnings.append(
-                "panels must contain [image_path, label, panel_type] objects for composite assembly"
+                "panels must contain [image_path, label, panel_type] objects "
+                "for composite assembly"
             )
             return None
 
@@ -307,7 +316,10 @@ class GenerateFigureUseCase:
 
         base_dir = Path(output_dir or self._output_dir)
         base_dir.mkdir(parents=True, exist_ok=True)
-        out_path = base_dir / f"{self._slugify(normalized_title)}_composite_{int(time.time())}.png"
+        out_path = (
+            base_dir
+            / f"{self._slugify(normalized_title)}_composite_{int(time.time())}.png"
+        )
         compose_result = self._composer.compose(
             panels=panels,
             title=normalized_title,

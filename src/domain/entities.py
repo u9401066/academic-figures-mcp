@@ -109,7 +109,7 @@ class GenerationManifest:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "GenerationManifest":
+    def from_dict(cls, data: dict[str, Any]) -> GenerationManifest:
         created_raw = data.get("created_at")
         created_at = (
             datetime.fromisoformat(created_raw)

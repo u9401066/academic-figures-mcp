@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import json
 import os
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -11,8 +10,11 @@ from src.domain.entities import GenerationManifest
 from src.domain.exceptions import ManifestNotFoundError
 from src.infrastructure.manifest_store import FileManifestStore
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def _sample_manifest(manifest_id: str, output_path: str) -> GenerationManifest:
+
+def _sample_manifest(manifest_id: str, output_path: Path) -> GenerationManifest:
     return GenerationManifest(
         manifest_id=manifest_id,
         asset_kind="academic_figure",
@@ -27,7 +29,7 @@ def _sample_manifest(manifest_id: str, output_path: str) -> GenerationManifest:
         target_journal="Nature",
         journal_profile={"id": "nature_portfolio"},
         source_context={"pmid": "123"},
-        output_path=output_path,
+        output_path=str(output_path),
         model="stub-model",
         provider="google",
         generation_contract="planned_payload",
@@ -37,7 +39,7 @@ def _sample_manifest(manifest_id: str, output_path: str) -> GenerationManifest:
 
 def test_file_manifest_store_saves_and_loads(tmp_path: Path) -> None:
     store = FileManifestStore(root_dir=str(tmp_path))
-    manifest = _sample_manifest("manifest-1", output_path=str(tmp_path / "out.png"))
+    manifest = _sample_manifest("manifest-1", output_path=tmp_path / "out.png")
 
     store.save(manifest)
     loaded = store.load("manifest-1")
@@ -50,8 +52,8 @@ def test_file_manifest_store_saves_and_loads(tmp_path: Path) -> None:
 
 def test_file_manifest_store_lists_latest_first(tmp_path: Path) -> None:
     store = FileManifestStore(root_dir=str(tmp_path))
-    first = _sample_manifest("first", output_path=str(tmp_path / "first.png"))
-    second = _sample_manifest("second", output_path=str(tmp_path / "second.png"))
+    first = _sample_manifest("first", output_path=tmp_path / "first.png")
+    second = _sample_manifest("second", output_path=tmp_path / "second.png")
 
     store.save(first)
     time.sleep(0.01)
@@ -72,7 +74,7 @@ def test_file_manifest_store_raises_on_missing_manifest(tmp_path: Path) -> None:
 
 def test_file_manifest_store_skips_unreadable_files(tmp_path: Path) -> None:
     store = FileManifestStore(root_dir=str(tmp_path))
-    good = _sample_manifest("good", output_path=str(tmp_path / "good.png"))
+    good = _sample_manifest("good", output_path=tmp_path / "good.png")
     store.save(good)
 
     bad_path = tmp_path / "bad.json"

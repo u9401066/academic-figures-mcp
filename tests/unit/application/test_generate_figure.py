@@ -105,7 +105,9 @@ class StubComposer:
         citation: str,
         output_path: str | None = None,
     ) -> dict[str, object]:
-        self.calls.append({"panels": panels, "title": title, "caption": caption, "citation": citation})
+        self.calls.append(
+            {"panels": panels, "title": title, "caption": caption, "citation": citation}
+        )
         out_path = Path(output_path or (self.output_dir / "composite.png"))
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_bytes(b"composite")

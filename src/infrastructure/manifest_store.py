@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 from pathlib import Path
-from typing import Iterable
 
 from src.domain.entities import GenerationManifest
 from src.domain.exceptions import ManifestNotFoundError
@@ -30,17 +30,17 @@ class FileManifestStore(ManifestStore):
         data = json.loads(path.read_text(encoding="utf-8"))
         return GenerationManifest.from_dict(data)
 
-    def list(self, limit: int = 20) -> list[GenerationManifest]:
-        manifests: list[GenerationManifest] = []
+    def list(self, limit: int = 20) -> builtins.list[GenerationManifest]:
+        manifests: builtins.list[GenerationManifest] = []
         for path in self._iter_paths(limit):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 manifests.append(GenerationManifest.from_dict(data))
-            except Exception:
+            except (json.JSONDecodeError, OSError):
                 continue
         return manifests
 
-    def _iter_paths(self, limit: int) -> Iterable[Path]:
+    def _iter_paths(self, limit: int) -> builtins.list[Path]:
         if not self._root.exists():
             return []
         files = sorted(

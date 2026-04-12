@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from src.presentation import tools
-from src.presentation.dependencies import Container
+from src.application.list_manifests import ListManifestsRequest
 from src.application.replay_manifest import ReplayManifestRequest
 from src.application.retarget_journal import RetargetJournalRequest
-from src.application.list_manifests import ListManifestsRequest
+from src.presentation import tools
+from src.presentation.dependencies import Container
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch

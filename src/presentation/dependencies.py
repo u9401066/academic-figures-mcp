@@ -13,9 +13,9 @@ from src.application.plan_figure import PlanFigureUseCase
 from src.application.replay_manifest import ReplayManifestUseCase
 from src.application.retarget_journal import RetargetJournalUseCase
 from src.domain.exceptions import ConfigurationError
+from src.infrastructure.composite import CompositeFigureAssembler
 from src.infrastructure.config import load_config
 from src.infrastructure.gemini_adapter import GeminiAdapter
-from src.infrastructure.composite import CompositeFigureAssembler
 from src.infrastructure.manifest_store import FileManifestStore
 from src.infrastructure.prompt_engine import PromptEngine
 from src.infrastructure.pubmed_client import PubMedClient
