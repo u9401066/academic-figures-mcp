@@ -12,6 +12,7 @@ from src.application.plan_figure import PlanFigureUseCase
 from src.domain.exceptions import ConfigurationError
 from src.infrastructure.config import load_config
 from src.infrastructure.gemini_adapter import GeminiAdapter
+from src.infrastructure.manifest_store import FileManifestStore
 from src.infrastructure.prompt_engine import PromptEngine
 from src.infrastructure.pubmed_client import PubMedClient
 
@@ -29,6 +30,7 @@ class Container:
         self._generator: ImageGenerator | None = None
         self._fetcher: PubMedClient | None = None
         self._prompt_builder: PromptEngine | None = None
+        self._manifest_store: FileManifestStore | None = None
 
     @classmethod
     def get(cls) -> Container:
@@ -64,6 +66,12 @@ class Container:
     def output_dir(self) -> str:
         return self._config.output_dir
 
+    @property
+    def manifest_store(self) -> FileManifestStore:
+        if self._manifest_store is None:
+            self._manifest_store = FileManifestStore(self._config.manifest_dir)
+        return self._manifest_store
+
     # ── Use case factories ──────────────────────────────────
 
     def generate_figure_uc(self) -> GenerateFigureUseCase:
@@ -73,6 +81,7 @@ class Container:
             prompt_builder=self.prompt_builder,
             provider_name=self._config.gemini.provider,
             output_dir=self.output_dir,
+            manifest_store=self.manifest_store,
         )
 
     def plan_figure_uc(self) -> PlanFigureUseCase:

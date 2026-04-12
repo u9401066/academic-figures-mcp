@@ -140,6 +140,7 @@ class GeminiConfig:
 class ServerConfig:
     transport: str = "stdio"
     output_dir: str = ".academic-figures/outputs"
+    manifest_dir: str = ".academic-figures/manifests"
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
 
 
@@ -233,5 +234,6 @@ def load_config() -> ServerConfig:
     return ServerConfig(
         transport=transport,
         output_dir=os.environ.get("AFM_OUTPUT_DIR", ".academic-figures/outputs"),
+        manifest_dir=os.environ.get("AFM_MANIFEST_DIR", ".academic-figures/manifests"),
         gemini=gemini,
     )

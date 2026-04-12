@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import cast
 
 from src.application.generate_figure import GenerateFigureRequest, GenerateFigureUseCase
-from src.domain.entities import GenerationResult, Paper
-from src.domain.interfaces import ImageGenerator, MetadataFetcher, PromptBuilder
+from src.domain.entities import GenerationManifest, GenerationResult, Paper
+from src.domain.interfaces import ImageGenerator, ManifestStore, MetadataFetcher, PromptBuilder
 
 
 class FailFetcher(MetadataFetcher):
@@ -74,6 +74,21 @@ class StubPromptBuilder(PromptBuilder):
                 },
             )
         return prompt, None
+
+
+class StubManifestStore(ManifestStore):
+    def __init__(self) -> None:
+        self.saved: list[GenerationManifest] = []
+
+    def save(self, manifest: GenerationManifest) -> GenerationManifest:
+        self.saved.append(manifest)
+        return manifest
+
+    def load(self, manifest_id: str) -> GenerationManifest:
+        raise AssertionError(f"load should not be called for {manifest_id}")
+
+    def list(self, limit: int = 20) -> list[GenerationManifest]:
+        return self.saved[:limit]
 
 
 class BridgePromptBuilder(PromptBuilder):
@@ -186,3 +201,48 @@ def test_generate_figure_pmid_bridge_runs_internal_plan_first(tmp_path: Path) ->
     assert prompt_builder.inject_calls == 1
     warnings = cast("list[str]", result["warnings"])
     assert any("plan-first compatibility bridge" in warning for warning in warnings)
+
+
+def test_generate_figure_persists_manifest(tmp_path: Path) -> None:
+    generator = StubGenerator()
+    prompt_builder = StubPromptBuilder()
+    manifest_store = StubManifestStore()
+    use_case = GenerateFigureUseCase(
+        fetcher=FailFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        output_dir=str(tmp_path),
+        manifest_store=manifest_store,
+    )
+
+    payload = {
+        "asset_kind": "repo_icon",
+        "title": "Academic Figures MCP",
+        "goal": "Create a distinctive icon for the Academic Figures MCP repository.",
+        "selected_figure_type": "infographic",
+        "render_route": "image_generation",
+        "language": "en",
+        "output_size": "1024x1024",
+        "target_journal": "Nature",
+        "source_context": {
+            "repo": "academic-figures-mcp",
+            "tagline": "workflow-first academic figure harness",
+        },
+        "must_include": [
+            "scientific paper silhouette",
+            "diagram nodes or chart motif",
+            "strong teal and amber contrast",
+        ],
+    }
+
+    result = use_case.execute(
+        GenerateFigureRequest(planned_payload=payload, output_dir=str(tmp_path))
+    )
+
+    assert result["manifest_id"] is not None
+    assert manifest_store.saved
+    manifest = manifest_store.saved[0]
+    assert manifest.asset_kind == "repo_icon"
+    assert manifest.prompt.startswith("## Block 1")
+    assert manifest.prompt_base.startswith("## Block 1")
+    assert manifest.render_route_used == "image_generation"

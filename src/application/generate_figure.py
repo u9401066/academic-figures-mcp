@@ -5,14 +5,17 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from src.application.plan_figure import PlanFigureRequest, PlanFigureUseCase
+from src.domain.entities import GenerationManifest
 
 if TYPE_CHECKING:
     from src.domain.entities import GenerationResult
-    from src.domain.interfaces import ImageGenerator, MetadataFetcher, PromptBuilder
+    from src.domain.interfaces import ImageGenerator, ManifestStore, MetadataFetcher, PromptBuilder
 
 
 PMID_COMPATIBILITY_WARNING = (
@@ -40,12 +43,14 @@ class GenerateFigureUseCase:
         prompt_builder: PromptBuilder,
         provider_name: str = "google",
         output_dir: str = ".academic-figures/outputs",
+        manifest_store: ManifestStore | None = None,
     ) -> None:
         self._fetcher = fetcher
         self._generator = generator
         self._prompt_builder = prompt_builder
         self._provider_name = provider_name
         self._output_dir = output_dir
+        self._manifest_store = manifest_store
 
     def execute(self, req: GenerateFigureRequest) -> dict[str, object]:
         if req.planned_payload is not None:
@@ -139,7 +144,7 @@ class GenerateFigureUseCase:
         language = self._as_text(payload.get("language")) or req.language
         output_size = self._as_text(payload.get("output_size")) or req.output_size
         title = self._resolve_title(payload=payload, asset_kind=asset_kind)
-        prompt = self._resolve_planned_prompt(
+        prompt_base = self._resolve_planned_prompt(
             payload=payload,
             title=title,
             asset_kind=asset_kind,
@@ -158,10 +163,12 @@ class GenerateFigureUseCase:
         journal_profile = payload_journal_profile
         if should_inject_journal:
             prompt, journal_profile = self._prompt_builder.inject_journal_requirements(
-                prompt,
+                prompt_base,
                 target_journal=target_journal,
                 source_journal=source_journal,
             )
+        else:
+            prompt = prompt_base
         if target_journal and journal_profile is None:
             warnings.append(
                 "No journal profile matched target_journal "
@@ -193,6 +200,23 @@ class GenerateFigureUseCase:
         )
         out_path = out_dir / f"{stem}_{figure_type}_{ts}{result.file_extension}"
         result.save(out_path)
+        manifest_id = self._persist_manifest(
+            payload=payload,
+            prompt=prompt,
+            prompt_base=prompt_base,
+            asset_kind=asset_kind,
+            figure_type=figure_type,
+            language=language,
+            output_size=output_size,
+            requested_render_route=requested_render_route,
+            render_route=render_route,
+            target_journal=target_journal,
+            journal_profile=journal_profile,
+            source_context=source_context_dict,
+            output_path=str(out_path),
+            model=result.model,
+            warnings=warnings,
+        )
 
         return {
             "status": "ok",
@@ -214,6 +238,7 @@ class GenerateFigureUseCase:
             "elapsed_seconds": round(time.time() - start, 2),
             "gemini_text": result.text,
             "warnings": warnings,
+            "manifest_id": manifest_id,
         }
 
     def _resolve_title(self, *, payload: dict[str, Any], asset_kind: str) -> str:
@@ -362,3 +387,55 @@ class GenerateFigureUseCase:
         slug = re.sub(r"[^a-z0-9]+", "_", value.lower())
         slug = slug.strip("_")
         return slug or "asset"
+
+    def _persist_manifest(
+        self,
+        *,
+        payload: dict[str, Any],
+        prompt: str,
+        prompt_base: str,
+        asset_kind: str,
+        figure_type: str,
+        language: str,
+        output_size: str,
+        requested_render_route: str,
+        render_route: str,
+        target_journal: str | None,
+        journal_profile: dict[str, object] | None,
+        source_context: dict[str, object],
+        output_path: str,
+        model: str,
+        warnings: list[str],
+    ) -> str | None:
+        if self._manifest_store is None:
+            return None
+
+        parent_manifest_id: str | None = None
+        parent_field = payload.get("manifest_id")
+        if isinstance(parent_field, str) and parent_field.strip():
+            parent_manifest_id = parent_field.strip()
+
+        manifest: GenerationManifest = GenerationManifest(
+            manifest_id=uuid4().hex,
+            asset_kind=asset_kind,
+            figure_type=figure_type,
+            language=language,
+            output_size=output_size,
+            render_route_requested=requested_render_route,
+            render_route_used=render_route,
+            prompt=prompt,
+            prompt_base=prompt_base,
+            planned_payload=dict(payload),
+            target_journal=target_journal,
+            journal_profile=journal_profile if journal_profile is not None else None,
+            source_context=source_context,
+            output_path=output_path,
+            model=model,
+            provider=self._provider_name,
+            generation_contract="planned_payload",
+            created_at=datetime.now(tz=timezone.utc),
+            parent_manifest_id=parent_manifest_id,
+            warnings=warnings,
+        )
+        self._manifest_store.save(manifest)
+        return manifest.manifest_id
