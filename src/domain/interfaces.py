@@ -94,3 +94,16 @@ class FigureComposer(ABC):
         citation: str,
         output_path: str | None = None,
     ) -> dict[str, object]: ...
+
+
+class StyleStore(ABC):
+    """Persists and retrieves reusable style profiles."""
+
+    @abstractmethod
+    def save(self, profile: object) -> object: ...
+
+    @abstractmethod
+    def load(self, style_id: str) -> object: ...
+
+    @abstractmethod
+    def list(self, limit: int = 20) -> list[object]: ...

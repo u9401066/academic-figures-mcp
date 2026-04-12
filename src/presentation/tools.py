@@ -7,8 +7,10 @@ from src.application.evaluate_figure import EvaluateFigureRequest
 from src.application.generate_figure import GenerateFigureRequest
 from src.application.list_manifests import ListManifestsRequest
 from src.application.plan_figure import PlanFigureRequest
+from src.application.poster import GeneratePosterRequest, PlanPosterRequest
 from src.application.replay_manifest import ReplayManifestRequest
 from src.application.retarget_journal import RetargetJournalRequest
+from src.application.style import ApplyStyleRequest, ExtractStyleRequest, ListStylesRequest
 from src.domain.exceptions import ConfigurationError, DomainError, ValidationError
 from src.presentation.dependencies import Container
 from src.presentation.server import mcp
@@ -17,6 +19,7 @@ from src.presentation.validation import (
     normalize_figure_type,
     normalize_image_path,
     normalize_language,
+    normalize_layout_preset,
     normalize_list_limit,
     normalize_manifest_id,
     normalize_optional_pmid,
@@ -25,6 +28,8 @@ from src.presentation.validation import (
     normalize_planned_payload,
     normalize_pmid,
     normalize_pmids,
+    normalize_poster_sections,
+    normalize_style_id,
     normalize_style_preset,
     normalize_target_journal,
 )
@@ -195,8 +200,15 @@ def composite_figure(
     caption: str = "",
     citation: str = "",
     output_path: str | None = None,
+    layout_preset: str | None = None,
+    label_style: str | None = None,
 ) -> dict[str, object]:
-    """Composite multiple panel images into a publication-ready figure."""
+    """Composite multiple panel images into a publication-ready figure.
+
+    layout_preset: grid_2x2 | horizontal_strip | vertical_strip |
+                   asymmetric_left | single_featured (default: auto balanced)
+    label_style: uppercase | lowercase | numeric | roman | none (default: uppercase)
+    """
     try:
         if not panels:
             raise ValidationError("panels must contain at least one item")
@@ -205,7 +217,10 @@ def composite_figure(
 
         from src.infrastructure.composite import CompositeFigure, PanelSpec
 
-        composer = CompositeFigure()
+        composer = CompositeFigure(
+            layout_preset=layout_preset,
+            label_style=label_style,
+        )
         for index, panel in enumerate(panels):
             if len(panel) != 2:
                 raise ValidationError(f"panels[{index}] must contain [image_path, panel_type]")
@@ -286,5 +301,132 @@ def list_manifests(limit: int = 20) -> dict[str, object]:
         normalized_limit = normalize_list_limit(limit)
         uc = Container.get().list_manifests_uc()
         return uc.execute(ListManifestsRequest(limit=normalized_limit))
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc, limit=limit)
+
+
+# ── Poster tools (Theme 3) ──────────────────────────────────────
+
+
+@mcp.tool()
+def plan_poster(
+    pmid: str,
+    title: str = "",
+    sections: list[dict[str, str]] | None = None,
+    layout_preset: str = "portrait_a0",
+    language: str = "zh-TW",
+    target_journal: str | None = None,
+) -> dict[str, object]:
+    """Plan a conference poster layout and content before generation.
+
+    Supports layout_preset: portrait_a0, landscape_a0, tri_column.
+    Sections should contain name + content pairs (e.g., introduction, methods, results).
+    """
+    try:
+        request = PlanPosterRequest(
+            pmid=normalize_pmid(pmid),
+            title=title.strip(),
+            sections=normalize_poster_sections(sections),
+            layout_preset=normalize_layout_preset(layout_preset),
+            language=normalize_language(language),
+            target_journal=normalize_target_journal(target_journal),
+        )
+        uc = Container.get().plan_poster_uc()
+        return uc.execute(request)
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc, pmid=pmid)
+
+
+@mcp.tool()
+def generate_poster(
+    pmid: str | None = None,
+    planned_payload: dict[str, object] | None = None,
+    title: str = "",
+    sections: list[dict[str, str]] | None = None,
+    layout_preset: str = "portrait_a0",
+    language: str = "zh-TW",
+    output_dir: str | None = None,
+    target_journal: str | None = None,
+) -> dict[str, object]:
+    """Generate a publication-ready academic poster.
+
+    Preferred path: pass a planned_payload from plan_poster.
+    Alternatively, pass a PMID and let the use case plan internally.
+    """
+    try:
+        if pmid is None and planned_payload is None:
+            raise ValidationError("Either pmid or planned_payload is required")
+
+        request = GeneratePosterRequest(
+            pmid=normalize_pmid(pmid) if pmid else None,
+            planned_payload=(
+                normalize_planned_payload(planned_payload) if planned_payload else None
+            ),
+            title=title.strip(),
+            sections=normalize_poster_sections(sections),
+            layout_preset=normalize_layout_preset(layout_preset),
+            language=normalize_language(language),
+            output_dir=normalize_output_dir(output_dir),
+            target_journal=normalize_target_journal(target_journal),
+        )
+        uc = Container.get().generate_poster_uc()
+        return uc.execute(request)
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc, pmid=pmid)
+
+
+# ── Style tools (Theme 4) ───────────────────────────────────────
+
+
+@mcp.tool()
+def extract_style(
+    image_path: str,
+) -> dict[str, object]:
+    """Extract a reusable visual style profile from an existing image.
+
+    Returns a style_id that can be used with apply_style to reproduce
+    the same visual style on new figures.
+    """
+    try:
+        request = ExtractStyleRequest(
+            image_path=normalize_image_path(image_path),
+        )
+        uc = Container.get().extract_style_uc()
+        return uc.execute(request)
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc)
+
+
+@mcp.tool()
+def apply_style(
+    style_id: str,
+    planned_payload: dict[str, object],
+    output_dir: str | None = None,
+) -> dict[str, object]:
+    """Apply a previously extracted style profile to a new generation job.
+
+    Provide the style_id from extract_style and a planned_payload
+    (typically from plan_figure). The style will be injected into the
+    generation prompt and used to produce a styled figure.
+    """
+    try:
+        request = ApplyStyleRequest(
+            style_id=normalize_style_id(style_id),
+            planned_payload=normalize_planned_payload(planned_payload),
+            output_dir=normalize_output_dir(output_dir),
+        )
+        uc = Container.get().apply_style_uc()
+        return uc.execute(request)
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc, style_id=style_id)
+
+
+@mcp.tool()
+def list_styles(limit: int = 20) -> dict[str, object]:
+    """List saved style profiles available for reuse."""
+    try:
+        normalized_limit = normalize_list_limit(limit)
+        uc = Container.get().list_styles_uc()
+        return uc.execute(ListStylesRequest(limit=normalized_limit))
     except (ConfigurationError, ValidationError, DomainError) as exc:
         return _error_payload(exc, limit=limit)

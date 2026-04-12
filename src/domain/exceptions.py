@@ -31,3 +31,11 @@ class ProviderCapabilityError(DomainError):
 
 class ManifestNotFoundError(DomainError):
     """Requested manifest does not exist on disk."""
+
+
+class StyleNotFoundError(DomainError):
+    """Requested style profile does not exist on disk."""
+
+
+class PosterValidationError(DomainError):
+    """Poster content exceeds readability guardrails."""

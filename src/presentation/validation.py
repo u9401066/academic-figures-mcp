@@ -150,3 +150,49 @@ def normalize_list_limit(value: int) -> int:
     if value > _MAX_LIST_LIMIT:
         raise ValidationError(f"limit cannot exceed {_MAX_LIST_LIMIT}")
     return value
+
+
+# ── Poster validation (Theme 3) ─────────────────────────────────
+
+_SUPPORTED_POSTER_LAYOUTS = frozenset({"portrait_a0", "landscape_a0", "tri_column"})
+
+
+def normalize_layout_preset(value: str) -> str:
+    normalized = value.strip().lower()
+    if not normalized:
+        return "portrait_a0"
+    if normalized not in _SUPPORTED_POSTER_LAYOUTS:
+        supported = ", ".join(sorted(_SUPPORTED_POSTER_LAYOUTS))
+        raise ValidationError(f"layout_preset must be one of: {supported}")
+    return normalized
+
+
+def normalize_poster_sections(
+    value: list[dict[str, str]] | None,
+) -> list[dict[str, str]] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValidationError("sections must be a list of {name, content} objects")
+    validated: list[dict[str, str]] = []
+    for i, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ValidationError(f"sections[{i}] must be an object")
+        name = str(item.get("name", "")).strip()
+        content = str(item.get("content", "")).strip()
+        if not name:
+            raise ValidationError(f"sections[{i}].name is required")
+        validated.append({"name": name, "content": content})
+    return validated
+
+
+# ── Style validation (Theme 4) ──────────────────────────────────
+
+
+def normalize_style_id(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValidationError("style_id is required")
+    if len(normalized) > 200:
+        raise ValidationError("style_id is too long")
+    return normalized
