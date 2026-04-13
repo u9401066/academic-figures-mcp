@@ -35,7 +35,7 @@ Mapped user requirements:
 
 ### Theme 2: Multi-Panel and Composite Figures
 
-Status: in progress (composite render route shipped; planning schemas next)
+Status: shipped (composite render route + layout presets + panel-label rules)
 
 Goals:
 
@@ -46,7 +46,7 @@ Goals:
 Planned deliverables:
 
 - Multi-panel figure schema in planned_payload. ✅ `planned_payload.panels` accepted with `render_route=composite_figure` for assembly.
-- Panel layout presets and panel-label rules. ⏳ Current assembler applies balanced columns with auto labels; presets remain planned.
+- Panel layout presets and panel-label rules. ✅ Five layout presets (grid_2x2, horizontal_strip, vertical_strip, asymmetric_left, single_featured) and five label styles (uppercase, lowercase, numeric, roman, none) are available via `layout_preset` and `label_style` parameters.
 - Composite assembly tool or route. ✅ `generate_figure` now supports a composite render route; `composite_figure` tool remains for direct calls.
 - Single-output export for montage figures. ✅ Output is written as a single PNG with DPI metadata.
 
@@ -57,7 +57,7 @@ Mapped user requirements:
 
 ### Theme 3: Poster Workflow
 
-Status: planned
+Status: shipped
 
 Goals:
 
@@ -67,10 +67,10 @@ Goals:
 
 Planned deliverables:
 
-- Poster asset_kind and planning route.
-- Poster layout presets.
-- Large-canvas export rules.
-- Text-density and readability guardrails.
+- Poster asset_kind and planning route. ✅ `plan_poster` and `generate_poster` MCP tools with `asset_kind=poster`.
+- Poster layout presets. ✅ Three presets: portrait_a0, landscape_a0, tri_column with conference-standard dimensions.
+- Large-canvas export rules. ✅ Canvas size, DPI, and column count injected into generation prompt from preset config.
+- Text-density and readability guardrails. ✅ `validate_poster_content` enforces title length, section count, and per-section character limits.
 
 Mapped user requirements:
 
@@ -78,7 +78,7 @@ Mapped user requirements:
 
 ### Theme 4: Style Intelligence and Reuse
 
-Status: discovery
+Status: shipped
 
 Goals:
 
@@ -88,9 +88,9 @@ Goals:
 
 Planned deliverables:
 
-- Style extraction workflow from an existing image.
-- Reusable style prompt or style profile artifact.
-- Style replay against new planned_payload jobs.
+- Style extraction workflow from an existing image. ✅ `extract_style` MCP tool analyses an image and returns a `StyleProfile` (color palette, typography, layout, mood).
+- Reusable style prompt or style profile artifact. ✅ `StyleProfile` is persisted as JSON in `.academic-figures/styles/` and can be listed via `list_styles`.
+- Style replay against new planned_payload jobs. ✅ `apply_style` MCP tool injects a stored style profile into any planned_payload and regenerates.
 
 Mapped user requirements:
 
@@ -100,9 +100,9 @@ Mapped user requirements:
 
 1. Prompt persistence and replay. ✅
 2. Journal retargeting for existing assets. ✅
-3. Grouped figure planning and composite assembly. ▶️ composite route shipped; grouped planning next.
-4. Poster-specific planning and export.
-5. Image-to-style extraction and reuse.
+3. Grouped figure planning and composite assembly. ✅ composite route + layout presets + label rules.
+4. Poster-specific planning and export. ✅ plan_poster + generate_poster with guardrails.
+5. Image-to-style extraction and reuse. ✅ extract_style + apply_style + list_styles.
 
 ## Out of Scope for This Roadmap
 

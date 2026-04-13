@@ -7,6 +7,7 @@ publication-ready multi-panel figure with:
 - Auto-placed numbered labels (100% accurate text)
 - Orientation markers, title, footer
 - Journal-compliant spacing and typography
+- Layout presets (grid, strip, asymmetric, featured)
 
 This implements the "分而治之" strategy:
   Gemini generates each panel → Pillow composites with perfect layout
@@ -14,6 +15,7 @@ This implements the "分而治之" strategy:
 
 from __future__ import annotations
 
+import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +23,36 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from src.domain.interfaces import FigureComposer
+from src.domain.value_objects import (
+    LAYOUT_PRESET_CONFIGS,
+    LayoutPreset,
+    PanelLabelStyle,
+)
+
+# ─── Type coercion helpers ──────────────────────────────────────
+
+
+def _safe_int(value: object, default: int = 0) -> int:
+    """Coerce a value from ``dict[str, object]`` to int safely."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(str(value))
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(value: object, default: float = 0.0) -> float:
+    """Coerce a value from ``dict[str, object]`` to float safely."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value))
+    except (ValueError, TypeError):
+        return default
+
 
 # ─── Layout Config ──────────────────────────────────────────────
 
@@ -80,15 +112,59 @@ class _PanelEntry:
     image_path: str
 
 
+def _generate_label(index: int, style: PanelLabelStyle) -> str:
+    """Generate a panel label for the given *index* and *style*."""
+    if style == PanelLabelStyle.NONE:
+        return ""
+    if style == PanelLabelStyle.NUMERIC:
+        return str(index + 1)
+    if style == PanelLabelStyle.ROMAN:
+        roman_numerals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+        return roman_numerals[index] if index < len(roman_numerals) else str(index + 1)
+    letter = chr(ord("A") + index) if index < 26 else f"P{index + 1}"
+    if style == PanelLabelStyle.LOWERCASE:
+        return letter.lower()
+    return letter
+
+
+def _resolve_grid(
+    n_panels: int,
+    preset_name: str | None,
+) -> tuple[int, int]:
+    """Return ``(columns, rows)`` for a given preset and panel count."""
+    if preset_name and preset_name in LAYOUT_PRESET_CONFIGS:
+        cfg = LAYOUT_PRESET_CONFIGS[preset_name]
+        cols = _safe_int(cfg.get("columns"), -1)
+        rows = _safe_int(cfg.get("rows"), -1)
+        if cols > 0 and rows > 0:
+            return cols, rows
+        if cols > 0:
+            return cols, math.ceil(n_panels / cols)
+        if rows > 0:
+            return math.ceil(n_panels / rows), rows
+    # Auto: balanced columns
+    cols = math.ceil(math.sqrt(n_panels))
+    return cols, math.ceil(n_panels / cols)
+
+
 class CompositeFigure:
     """Builds a publication-ready multi-panel figure."""
 
-    def __init__(self, config: LayoutConfig | None = None):
+    def __init__(
+        self,
+        config: LayoutConfig | None = None,
+        layout_preset: str | None = None,
+        label_style: str | None = None,
+    ):
         self.config = config or LayoutConfig()
         self.panels: list[_PanelEntry] = []
         self.title = ""
         self.caption = ""
         self.citation = ""
+        self._layout_preset = layout_preset
+        self._label_style = (
+            PanelLabelStyle(label_style) if label_style else PanelLabelStyle.UPPERCASE
+        )
 
     def add_panel(self, spec: PanelSpec, image_path: str) -> CompositeFigure:
         """Add a panel image to the composition."""
@@ -185,39 +261,30 @@ class CompositeFigure:
         if n_panels == 0:
             return {"status": "error", "error": "No panels added"}
 
-        # Equal-width panels with gaps
-        total_gaps = (n_panels - 1) * cfg.PANEL_GAP
-        panel_w = (area_right - area_left - total_gaps) // n_panels
+        # Resolve grid from preset
+        cols, rows = _resolve_grid(n_panels, self._layout_preset)
+        usable_w = area_right - area_left
+        usable_h = panel_h
 
-        for i, ps in enumerate(self.panels):
-            x = area_left + i * (panel_w + cfg.PANEL_GAP)
-            y = panel_top
-            w = panel_w
-            h = panel_h
+        # Check for asymmetric_left special handling
+        is_asymmetric = (
+            self._layout_preset == LayoutPreset.ASYMMETRIC_LEFT and n_panels >= 2
+        )
+        is_featured = (
+            self._layout_preset == LayoutPreset.SINGLE_FEATURED and n_panels >= 2
+        )
 
-            # Load and resize panel image
-            try:
-                with Image.open(ps.image_path) as panel_image:
-                    resized_image = panel_image.resize((w, h), Image.Resampling.LANCZOS)
-                    canvas.paste(resized_image, (x, y))
-            except Exception as e:
-                print(f"Warning: Failed to load panel image: {e}")
-                # Draw placeholder
-                draw.rectangle([x, y, x + w, y + h], fill="#F0F0F0")
-
-            # Panel label (A, B, C)
-            if ps.panel.label:
-                label = ps.panel.label
-                label_font = self.get_font(cfg.LABEL_FONT_SIZE)
-                self._draw_label(draw, label, x + 15, y + 15, cfg, label_font)
-
-        # Divider lines between panels
-        for i in range(n_panels - 1):
-            x = area_left + (i + 1) * panel_w + i * cfg.PANEL_GAP
-            draw.line(
-                [(x - cfg.PANEL_GAP // 2, panel_top), (x - cfg.PANEL_GAP // 2, panel_bottom)],
-                fill=cfg.DIVIDER_COLOR,
-                width=cfg.DIVIDER_WIDTH,
+        if is_asymmetric:
+            self._render_asymmetric(
+                canvas, draw, area_left, panel_top, usable_w, usable_h, cfg
+            )
+        elif is_featured:
+            self._render_featured(
+                canvas, draw, area_left, panel_top, usable_w, usable_h, cfg
+            )
+        else:
+            self._render_grid(
+                canvas, draw, area_left, panel_top, usable_w, usable_h, cols, rows, cfg
             )
 
         # Footer / caption
@@ -246,9 +313,134 @@ class CompositeFigure:
             "height_px": cfg.HEIGHT,
             "dpi": cfg.DPI,
             "panels": n_panels,
+            "layout_preset": self._layout_preset or "auto",
+            "label_style": self._label_style.value,
             "width_inches": round(cfg.WIDTH / cfg.DPI, 1),
             "height_inches": round(cfg.HEIGHT / cfg.DPI, 1),
         }
+
+    # ── Grid-based rendering (default + strip + grid presets) ───
+
+    def _render_grid(
+        self,
+        canvas: Image.Image,
+        draw: ImageDraw.ImageDraw,
+        area_left: int,
+        panel_top: int,
+        usable_w: int,
+        usable_h: int,
+        cols: int,
+        rows: int,
+        cfg: LayoutConfig,
+    ) -> None:
+        panel_w = (usable_w - (cols - 1) * cfg.PANEL_GAP) // cols
+        panel_h = (usable_h - (rows - 1) * cfg.PANEL_GAP) // rows
+
+        for i, ps in enumerate(self.panels):
+            col = i % cols
+            row = i // cols
+            x = area_left + col * (panel_w + cfg.PANEL_GAP)
+            y = panel_top + row * (panel_h + cfg.PANEL_GAP)
+            self._paste_panel(canvas, draw, ps, x, y, panel_w, panel_h, i, cfg)
+
+        # Divider lines (vertical)
+        for c in range(1, cols):
+            x = area_left + c * panel_w + (c - 1) * cfg.PANEL_GAP + cfg.PANEL_GAP // 2
+            draw.line(
+                [(x, panel_top), (x, panel_top + usable_h)],
+                fill=cfg.DIVIDER_COLOR,
+                width=cfg.DIVIDER_WIDTH,
+            )
+
+    # ── Asymmetric left rendering ───────────────────────────────
+
+    def _render_asymmetric(
+        self,
+        canvas: Image.Image,
+        draw: ImageDraw.ImageDraw,
+        area_left: int,
+        panel_top: int,
+        usable_w: int,
+        usable_h: int,
+        cfg: LayoutConfig,
+    ) -> None:
+        preset = LAYOUT_PRESET_CONFIGS.get(LayoutPreset.ASYMMETRIC_LEFT, {})
+        weight_left = _safe_float(preset.get("weight_left"), 0.6)
+        left_w = int(usable_w * weight_left) - cfg.PANEL_GAP // 2
+        right_w = usable_w - left_w - cfg.PANEL_GAP
+
+        # First panel — full left column
+        self._paste_panel(
+            canvas, draw, self.panels[0],
+            area_left, panel_top, left_w, usable_h, 0, cfg,
+        )
+
+        # Remaining panels — stacked in the right column
+        right_x = area_left + left_w + cfg.PANEL_GAP
+        n_right = len(self.panels) - 1
+        rh = (usable_h - (n_right - 1) * cfg.PANEL_GAP) // max(n_right, 1)
+        for j, ps in enumerate(self.panels[1:]):
+            y = panel_top + j * (rh + cfg.PANEL_GAP)
+            self._paste_panel(canvas, draw, ps, right_x, y, right_w, rh, j + 1, cfg)
+
+    # ── Single-featured rendering ───────────────────────────────
+
+    def _render_featured(
+        self,
+        canvas: Image.Image,
+        draw: ImageDraw.ImageDraw,
+        area_left: int,
+        panel_top: int,
+        usable_w: int,
+        usable_h: int,
+        cfg: LayoutConfig,
+    ) -> None:
+        preset = LAYOUT_PRESET_CONFIGS.get(LayoutPreset.SINGLE_FEATURED, {})
+        feat_ratio = _safe_float(preset.get("featured_height_ratio"), 0.5)
+        featured_h = int(usable_h * feat_ratio) - cfg.PANEL_GAP // 2
+        bottom_h = usable_h - featured_h - cfg.PANEL_GAP
+
+        # Featured panel on top
+        self._paste_panel(
+            canvas, draw, self.panels[0],
+            area_left, panel_top, usable_w, featured_h, 0, cfg,
+        )
+
+        # Bottom row
+        n_bottom = len(self.panels) - 1
+        bw = (usable_w - (n_bottom - 1) * cfg.PANEL_GAP) // max(n_bottom, 1)
+        bottom_y = panel_top + featured_h + cfg.PANEL_GAP
+        for j, ps in enumerate(self.panels[1:]):
+            x = area_left + j * (bw + cfg.PANEL_GAP)
+            self._paste_panel(canvas, draw, ps, x, bottom_y, bw, bottom_h, j + 1, cfg)
+
+    # ── Shared helpers ──────────────────────────────────────────
+
+    def _paste_panel(
+        self,
+        canvas: Image.Image,
+        draw: ImageDraw.ImageDraw,
+        ps: _PanelEntry,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        index: int,
+        cfg: LayoutConfig,
+    ) -> None:
+        try:
+            with Image.open(ps.image_path) as panel_image:
+                resized_image = panel_image.resize((w, h), Image.Resampling.LANCZOS)
+                canvas.paste(resized_image, (x, y))
+        except Exception as e:
+            print(f"Warning: Failed to load panel image: {e}")
+            draw.rectangle([x, y, x + w, y + h], fill="#F0F0F0")
+
+        # Panel label
+        label = ps.panel.label or _generate_label(index, self._label_style)
+        if label:
+            label_font = self.get_font(cfg.LABEL_FONT_SIZE)
+            self._draw_label(draw, label, x + 15, y + 15, cfg, label_font)
 
     def _draw_label(
         self,
@@ -293,8 +485,14 @@ class CompositeFigureAssembler(FigureComposer):
         caption: str,
         citation: str,
         output_path: str | None = None,
+        layout_preset: str | None = None,
+        label_style: str | None = None,
     ) -> dict[str, object]:
-        composer = CompositeFigure(config=self._config)
+        composer = CompositeFigure(
+            config=self._config,
+            layout_preset=layout_preset,
+            label_style=label_style,
+        )
         for panel in panels:
             composer.add_panel(
                 PanelSpec(
