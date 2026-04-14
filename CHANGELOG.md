@@ -6,6 +6,30 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ## [Unreleased]
 
+## [0.4.0]
+
+### Added in 0.4.0
+
+- Added exact-label planning support through `expected_labels`, so text-heavy figures can carry explicit label targets into prompt construction and downstream verification.
+- Added a CJK-aware prompt block that explicitly instructs exact text fidelity, anti-romanization behavior, and label preservation for zh-TW / zh-CN / ja-JP / ko-KR outputs.
+- Added a standalone `verify_figure` MCP tool for post-hoc figure QA with label verification and domain-scored quality review.
+- Added a `multi_turn_edit` MCP tool that keeps iterative edit sessions open across multiple instructions for corrective refinement.
+- Added `src/application/verify_figure.py` and `src/application/multi_turn_edit.py` use cases to expose verification and multi-turn edit workflows cleanly through the application layer.
+- Added `GeminiImageVerifier` for image self-review with score parsing, label checks, and structured quality verdicts.
+- Added targeted CJK / quality-gate regression coverage in `tests/unit/application/test_cjk_quality_gate.py`.
+
+### Changed in 0.4.0
+
+- Planner routing now escalates text-heavy CJK requests toward SVG/code-render paths earlier instead of treating them like ordinary bitmap generation.
+- Model resolution now understands abstract intents such as `high_fidelity` and can escalate CJK-sensitive requests to a stronger image model automatically.
+- `generate_figure` now runs an optional post-generation quality gate and returns structured verification metadata when a verifier is available.
+- README and MCP surface descriptions now reflect the expanded verification, exact-label, and iterative editing capabilities.
+
+### Fixed in 0.4.0
+
+- Fixed Ollama provider config precedence so `OLLAMA_MODEL` is honored even when a generic `GEMINI_MODEL` is present in the environment.
+- Restored a green full release gate across Ruff, mypy, Bandit, and the full pytest suite.
+
 ## [0.3.1]
 
 ### Added in 0.3.1
