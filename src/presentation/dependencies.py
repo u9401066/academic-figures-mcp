@@ -10,14 +10,16 @@ from src.application.edit_figure import EditFigureUseCase
 from src.application.evaluate_figure import EvaluateFigureUseCase
 from src.application.generate_figure import GenerateFigureUseCase
 from src.application.list_manifests import ListManifestsUseCase
+from src.application.multi_turn_edit import MultiTurnEditUseCase
 from src.application.plan_figure import PlanFigureUseCase
 from src.application.replay_manifest import ReplayManifestUseCase
 from src.application.retarget_journal import RetargetJournalUseCase
+from src.application.verify_figure import VerifyFigureUseCase
 from src.domain.exceptions import ConfigurationError
 from src.infrastructure.composite import CompositeFigureAssembler
 from src.infrastructure.config import load_config
 from src.infrastructure.file_metadata_fetcher import FileMetadataFetcher
-from src.infrastructure.gemini_adapter import GeminiAdapter
+from src.infrastructure.gemini_adapter import GeminiAdapter, GeminiImageVerifier
 from src.infrastructure.manifest_store import FileManifestStore
 from src.infrastructure.prompt_engine import PromptEngine
 from src.infrastructure.pubmed_client import PubMedClient
@@ -26,6 +28,7 @@ if TYPE_CHECKING:
     from src.domain.interfaces import (
         FigureComposer,
         ImageGenerator,
+        ImageVerifier,
         ManifestStore,
         MetadataFetcher,
         PromptBuilder,
@@ -44,6 +47,7 @@ class Container:
         self._prompt_builder: PromptEngine | None = None
         self._manifest_store: FileManifestStore | None = None
         self._composer: CompositeFigureAssembler | None = None
+        self._verifier: ImageVerifier | None = None
 
     @classmethod
     def get(cls) -> Container:
@@ -103,6 +107,12 @@ class Container:
             self._composer = CompositeFigureAssembler()
         return self._composer
 
+    @property
+    def verifier(self) -> ImageVerifier:
+        if self._verifier is None:
+            self._verifier = GeminiImageVerifier(self._config.gemini)
+        return self._verifier
+
     # ── Use case factories ──────────────────────────────────
 
     def generate_figure_uc(self) -> GenerateFigureUseCase:
@@ -114,6 +124,7 @@ class Container:
             output_dir=self.output_dir,
             manifest_store=self.manifest_store,
             composer=self.composer,
+            verifier=self.verifier,
         )
 
     def plan_figure_uc(self) -> PlanFigureUseCase:
@@ -153,3 +164,9 @@ class Container:
 
     def list_manifests_uc(self) -> ListManifestsUseCase:
         return ListManifestsUseCase(manifest_store=self.manifest_store)
+
+    def verify_figure_uc(self) -> VerifyFigureUseCase:
+        return VerifyFigureUseCase(verifier=self.verifier)
+
+    def multi_turn_edit_uc(self) -> MultiTurnEditUseCase:
+        return MultiTurnEditUseCase(generator=self.generator)

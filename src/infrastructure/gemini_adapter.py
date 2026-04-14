@@ -17,7 +17,13 @@ from google import genai
 from google.genai import types
 
 from src.domain.entities import GenerationResult
-from src.domain.interfaces import ImageGenerator
+from src.domain.interfaces import ImageGenerator, ImageVerifier
+from src.domain.value_objects import (
+    EVAL_DOMAINS,
+    QUALITY_GATE_MIN_SCORE,
+    QUALITY_GATE_MIN_TOTAL,
+    QualityVerdict,
+)
 from src.infrastructure.config import OLLAMA_PROVIDER, OPENROUTER_PROVIDER
 
 if TYPE_CHECKING:
@@ -70,6 +76,14 @@ class GeminiAdapter(ImageGenerator):
         self._config = config
         self._client = None if not config.is_google else genai.Client(api_key=config.api_key)
 
+    def _resolve_model_name(self, model: str | None) -> str:
+        """Resolve model name — supports keys 'high_fidelity' / 'low_latency'."""
+        if model == "high_fidelity":
+            return self._config.high_fidelity_model
+        if model == "low_latency":
+            return self._config.low_latency_model
+        return model or self._config.default_model
+
     def generate(
         self,
         prompt: str,
@@ -77,7 +91,7 @@ class GeminiAdapter(ImageGenerator):
         model: str | None = None,
         aspect_ratio: str | None = None,
     ) -> GenerationResult:
-        model_name = model or self._config.default_model
+        model_name = self._resolve_model_name(model)
         ar = aspect_ratio or self._config.default_aspect_ratio
         start = time.time()
 
@@ -953,4 +967,184 @@ class EditSession:
                 else "image/png"
             ),
             error="" if image_bytes else "No image returned",
+        )
+
+
+class GeminiImageVerifier(ImageVerifier):
+    """Vision-based quality gate using Gemini to verify generated figures."""
+
+    def __init__(self, config: GeminiConfig) -> None:
+        self._config = config
+        self._client = None if not config.is_google else genai.Client(api_key=config.api_key)
+
+    def verify(
+        self,
+        image_bytes: bytes,
+        *,
+        expected_labels: list[str],
+        figure_type: str,
+        language: str,
+    ) -> QualityVerdict:
+        mime = _detect_image_media_type(image_bytes)
+
+        label_block = ""
+        if expected_labels:
+            numbered = "\n".join(
+                f"  {i}. 「{label}」" for i, label in enumerate(expected_labels, 1)
+            )
+            label_block = (
+                f"\n\nEXPECTED LABELS (check each one is present and correct):\n"
+                f"{numbered}\n"
+                f"For each label, report: FOUND_EXACT / FOUND_GARBLED / MISSING"
+            )
+
+        verification_prompt = (
+            f"You are a quality-gate reviewer for a {figure_type} academic figure.\n"
+            f"Target language: {language}\n\n"
+            "Score this figure on each of the following 8 domains (1-5 scale):\n"
+            + "\n".join(f"- {d}" for d in EVAL_DOMAINS)
+            + "\n\nFor each domain, output exactly: DOMAIN: SCORE JUSTIFICATION"
+            + label_block
+            + "\n\nFinally, list any CRITICAL issues that would block publication."
+            + "\n\nFormat your response as structured text."
+        )
+
+        result = self._call_vision(
+            image_bytes=image_bytes,
+            mime_type=mime,
+            prompt=verification_prompt,
+        )
+
+        return self._parse_verdict(
+            text=result,
+            expected_labels=expected_labels,
+        )
+
+    def _call_vision(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        prompt: str,
+    ) -> str:
+        if self._config.is_google:
+            return self._call_vision_google(image_bytes, mime_type, prompt)
+        if self._config.is_openrouter:
+            return self._call_vision_openrouter(image_bytes, mime_type, prompt)
+        return "Vision verification not supported on this provider."
+
+    def _call_vision_google(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        prompt: str,
+    ) -> str:
+        client = self._client or genai.Client(api_key=self._config.api_key)
+        try:
+            response = client.models.generate_content(
+                model=self._config.default_model,
+                contents=cast(
+                    "Any",
+                    [prompt, types.Part.from_bytes(data=image_bytes, mime_type=mime_type)],
+                ),
+                config=types.GenerateContentConfig(response_modalities=["TEXT"]),
+            )
+        except Exception as exc:
+            return f"Vision verification failed: {exc}"
+
+        text_parts: list[str] = []
+        for part in getattr(response, "parts", []) or []:
+            if getattr(part, "text", None):
+                text_parts.append(part.text)
+        return "\n".join(text_parts) or "No response from vision model."
+
+    def _call_vision_openrouter(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        prompt: str,
+    ) -> str:
+        image_data_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+        payload: dict[str, object] = {
+            "model": self._config.default_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_data_url}},
+                    ],
+                }
+            ],
+        }
+        headers = {
+            "Authorization": f"Bearer {self._config.openrouter_api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            resp = httpx.post(
+                f"{self._config.openrouter_base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=self._config.request_timeout_seconds,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            choices = data.get("choices", [])
+            if choices:
+                return str(choices[0].get("message", {}).get("content", ""))
+        except Exception as exc:
+            return f"Vision verification failed: {exc}"
+        return "No response from vision model."
+
+    @staticmethod
+    def _parse_verdict(
+        text: str,
+        expected_labels: list[str],
+    ) -> QualityVerdict:
+        import re as _re
+
+        domain_scores: dict[str, float] = {}
+        for domain in EVAL_DOMAINS:
+            pattern = _re.compile(rf"{_re.escape(domain)}[:\s]+(\d(?:\.\d)?)", _re.IGNORECASE)
+            match = pattern.search(text)
+            if match:
+                domain_scores[domain] = float(match.group(1))
+            else:
+                domain_scores[domain] = 0.0
+
+        total = sum(domain_scores.values())
+
+        # Check label status
+        missing: list[str] = []
+        text_ok = True
+        lowered = text.lower()
+        for label in expected_labels:
+            if ("missing" in lowered and label.lower() in lowered) or (
+                "garbled" in lowered and label.lower() in lowered
+            ):
+                missing.append(label)
+                text_ok = False
+
+        # Extract critical issues
+        critical: list[str] = []
+        if "critical" in lowered:
+            for line in text.split("\n"):
+                if "critical" in line.lower() and len(line.strip()) > 10:
+                    critical.append(line.strip())
+
+        passed = (
+            total >= QUALITY_GATE_MIN_TOTAL
+            and all(s >= QUALITY_GATE_MIN_SCORE for s in domain_scores.values())
+            and text_ok
+            and len(critical) == 0
+        )
+
+        return QualityVerdict(
+            passed=passed,
+            domain_scores=domain_scores,
+            total_score=total,
+            critical_issues=tuple(critical),
+            text_verification_passed=text_ok if expected_labels else None,
+            missing_labels=tuple(missing),
+            summary=text[:500],
         )

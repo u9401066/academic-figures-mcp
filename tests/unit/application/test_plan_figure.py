@@ -19,7 +19,14 @@ class StubFetcher(MetadataFetcher):
 
 
 class StubPromptBuilder(PromptBuilder):
-    def build_prompt(self, paper: Paper, figure_type: str, language: str, output_size: str) -> str:
+    def build_prompt(
+        self,
+        paper: Paper,
+        figure_type: str,
+        language: str,
+        output_size: str,
+        expected_labels: list[str] | None = None,
+    ) -> str:
         return f"prompt::{paper.pmid}::{figure_type}::{language}::{output_size}"
 
     def inject_journal_requirements(

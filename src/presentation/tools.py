@@ -7,16 +7,20 @@ from src.application.edit_figure import EditFigureRequest
 from src.application.evaluate_figure import EvaluateFigureRequest
 from src.application.generate_figure import GenerateFigureRequest
 from src.application.list_manifests import ListManifestsRequest
+from src.application.multi_turn_edit import MultiTurnEditRequest
 from src.application.plan_figure import PlanFigureRequest
 from src.application.replay_manifest import ReplayManifestRequest
 from src.application.retarget_journal import RetargetJournalRequest
+from src.application.verify_figure import VerifyFigureRequest
 from src.domain.exceptions import ConfigurationError, DomainError, ValidationError
 from src.presentation.dependencies import Container
 from src.presentation.server import mcp
 from src.presentation.validation import (
+    normalize_expected_labels,
     normalize_feedback,
     normalize_figure_type,
     normalize_image_path,
+    normalize_instructions,
     normalize_language,
     normalize_list_limit,
     normalize_manifest_id,
@@ -45,11 +49,15 @@ def plan_figure(
     language: str = "zh-TW",
     output_size: str = "1024x1536",
     target_journal: str | None = None,
+    expected_labels: list[str] | None = None,
 ) -> dict[str, object]:
     """Plan the best figure type, route, and guardrails before generation.
 
     This tool returns a structured plan so an MCP host can decide whether to use
     direct image generation, SVG-style rendering, or deterministic chart routes.
+
+    expected_labels: Optional list of exact text labels (especially CJK) the
+    figure must contain. Enables CJK text fidelity guardrails and model escalation.
     """
     try:
         request = PlanFigureRequest(
@@ -59,6 +67,7 @@ def plan_figure(
             language=normalize_language(language),
             output_size=normalize_output_size(output_size),
             target_journal=normalize_target_journal(target_journal),
+            expected_labels=normalize_expected_labels(expected_labels),
         )
         uc = Container.get().plan_figure_uc()
         return uc.execute(request)
@@ -292,3 +301,58 @@ def list_manifests(limit: int = 20) -> dict[str, object]:
         return uc.execute(ListManifestsRequest(limit=normalized_limit))
     except (ConfigurationError, ValidationError, DomainError) as exc:
         return _error_payload(exc, limit=limit)
+
+
+@mcp.tool()
+def verify_figure(
+    image_path: str,
+    expected_labels: list[str] | None = None,
+    figure_type: str = "infographic",
+    language: str = "zh-TW",
+) -> dict[str, object]:
+    """Run the automated quality gate on a generated figure.
+
+    Uses vision self-check to evaluate 8 quality domains and verify CJK text
+    rendering accuracy. Returns pass/fail verdict, domain scores, and any
+    missing or garbled labels.
+
+    expected_labels: Exact text strings (e.g. CJK labels) the figure should contain.
+    """
+    try:
+        request = VerifyFigureRequest(
+            image_path=normalize_image_path(image_path),
+            expected_labels=normalize_expected_labels(expected_labels) or [],
+            figure_type=normalize_figure_type(figure_type, allow_auto=False),
+            language=normalize_language(language),
+        )
+        uc = Container.get().verify_figure_uc()
+        return uc.execute(request)
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc)
+
+
+@mcp.tool()
+def multi_turn_edit(
+    image_path: str,
+    instructions: list[str],
+    max_turns: int = 5,
+) -> dict[str, object]:
+    """Iteratively refine a figure through a multi-turn editing session.
+
+    Sends multiple editing instructions turn-by-turn to fix CJK labels,
+    adjust layout, or improve details. Each turn builds on the previous
+    result for precise iterative corrections.
+
+    instructions: List of natural language editing instructions applied in order.
+    Examples: ["修正標題為「急性冠心症處置流程」", "箭頭改紅色", "加大字體"]
+    """
+    try:
+        request = MultiTurnEditRequest(
+            image_path=normalize_image_path(image_path),
+            instructions=normalize_instructions(instructions),
+            max_turns=max_turns,
+        )
+        uc = Container.get().multi_turn_edit_uc()
+        return uc.execute(request)
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc)

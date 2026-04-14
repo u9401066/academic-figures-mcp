@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from src.domain.interfaces import (
         FigureComposer,
         ImageGenerator,
+        ImageVerifier,
         ManifestStore,
         MetadataFetcher,
         PromptBuilder,
@@ -51,6 +52,7 @@ class GenerateFigureUseCase:
         output_dir: str = ".academic-figures/outputs",
         manifest_store: ManifestStore | None = None,
         composer: FigureComposer | None = None,
+        verifier: ImageVerifier | None = None,
     ) -> None:
         self._fetcher = fetcher
         self._generator = generator
@@ -59,6 +61,7 @@ class GenerateFigureUseCase:
         self._output_dir = output_dir
         self._manifest_store = manifest_store
         self._composer = composer
+        self._verifier = verifier
 
     def execute(self, req: GenerateFigureRequest) -> dict[str, object]:
         if req.planned_payload is not None:
@@ -210,7 +213,10 @@ class GenerateFigureUseCase:
                 f"'{target_journal}'; using generic academic defaults."
             )
 
-        result: GenerationResult = self._generator.generate(prompt=prompt)
+        result: GenerationResult = self._generator.generate(
+            prompt=prompt,
+            model=self._resolve_model(payload),
+        )
         if not result.ok:
             return {
                 "status": "generation_failed",
@@ -253,6 +259,35 @@ class GenerateFigureUseCase:
             warnings=warnings,
         )
 
+        # ── Post-generation quality gate (self-review) ──────
+        quality_gate: dict[str, object] | None = None
+        expected_labels = self._as_text_list(payload.get("expected_labels"))
+        if self._verifier is not None and result.image_bytes:
+            try:
+                verdict = self._verifier.verify(
+                    result.image_bytes,
+                    expected_labels=expected_labels,
+                    figure_type=figure_type,
+                    language=language,
+                )
+                quality_gate = {
+                    "passed": verdict.passed,
+                    "total_score": verdict.total_score,
+                    "domain_scores": verdict.domain_scores,
+                    "critical_issues": list(verdict.critical_issues),
+                    "text_verification_passed": verdict.text_verification_passed,
+                    "missing_labels": list(verdict.missing_labels),
+                    "summary": verdict.summary,
+                }
+                if not verdict.passed:
+                    warnings.append(
+                        "Quality gate FAILED — consider using edit_figure to fix issues."
+                    )
+                if verdict.missing_labels:
+                    warnings.append(f"Missing/garbled labels: {', '.join(verdict.missing_labels)}")
+            except Exception:
+                quality_gate = {"passed": None, "error": "Quality gate check failed"}
+
         return {
             "status": "ok",
             "generation_contract": "planned_payload",
@@ -274,6 +309,7 @@ class GenerateFigureUseCase:
             "gemini_text": result.text,
             "warnings": warnings,
             "manifest_id": manifest_id,
+            "quality_gate": quality_gate,
         }
 
     def _execute_composite_payload(
@@ -456,6 +492,14 @@ class GenerateFigureUseCase:
         if title:
             return title
         return asset_kind.replace("_", " ").title()
+
+    @staticmethod
+    def _resolve_model(payload: dict[str, Any]) -> str | None:
+        """Return a model override key if the planner recommended one."""
+        rec = payload.get("model_recommendation")
+        if isinstance(rec, str) and rec:
+            return rec
+        return None
 
     def _resolve_planned_prompt(
         self,

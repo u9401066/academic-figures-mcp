@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from src.domain.entities import GenerationManifest, GenerationResult, Paper
+    from src.domain.value_objects import QualityVerdict
 
 
 class MetadataFetcher(ABC):
@@ -56,6 +57,7 @@ class PromptBuilder(ABC):
         figure_type: str,
         language: str,
         output_size: str,
+        expected_labels: list[str] | None = None,
     ) -> str: ...
 
     @abstractmethod
@@ -94,3 +96,17 @@ class FigureComposer(ABC):
         citation: str,
         output_path: str | None = None,
     ) -> dict[str, object]: ...
+
+
+class ImageVerifier(ABC):
+    """Verifies generated figure quality via vision / self-check."""
+
+    @abstractmethod
+    def verify(
+        self,
+        image_bytes: bytes,
+        *,
+        expected_labels: list[str],
+        figure_type: str,
+        language: str,
+    ) -> QualityVerdict: ...

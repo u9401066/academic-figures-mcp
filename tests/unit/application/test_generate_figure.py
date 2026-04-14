@@ -48,6 +48,7 @@ class StubPromptBuilder(PromptBuilder):
         figure_type: str,
         language: str,
         output_size: str,
+        expected_labels: list[str] | None = None,
     ) -> str:
         self.build_calls += 1
         raise AssertionError(
@@ -128,6 +129,7 @@ class BridgePromptBuilder(PromptBuilder):
         figure_type: str,
         language: str,
         output_size: str,
+        expected_labels: list[str] | None = None,
     ) -> str:
         self.build_calls += 1
         return f"planned::{paper.pmid}::{figure_type}::{language}::{output_size}"

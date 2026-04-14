@@ -150,3 +150,21 @@ def normalize_list_limit(value: int) -> int:
     if value > _MAX_LIST_LIMIT:
         raise ValidationError(f"limit cannot exceed {_MAX_LIST_LIMIT}")
     return value
+
+
+def normalize_expected_labels(values: list[str] | None) -> list[str] | None:
+    if values is None:
+        return None
+    labels = [v.strip() for v in values if v.strip()]
+    if len(labels) > 50:
+        raise ValidationError("expected_labels cannot contain more than 50 items")
+    return labels if labels else None
+
+
+def normalize_instructions(values: list[str]) -> list[str]:
+    instructions = [v.strip() for v in values if v.strip()]
+    if not instructions:
+        raise ValidationError("instructions must contain at least one item")
+    if len(instructions) > 10:
+        raise ValidationError("instructions cannot contain more than 10 items")
+    return instructions

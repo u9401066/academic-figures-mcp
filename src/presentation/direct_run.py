@@ -33,6 +33,7 @@ def main() -> int:
     plan.add_argument("--language", default="zh-TW")
     plan.add_argument("--output-size", default="1024x1536")
     plan.add_argument("--target-journal")
+    plan.add_argument("--expected-label", action="append", dest="expected_labels")
 
     generate = subparsers.add_parser("generate")
     generate_source = generate.add_mutually_exclusive_group(required=True)
@@ -49,10 +50,26 @@ def main() -> int:
     evaluate.add_argument("--figure-type", default="infographic")
     evaluate.add_argument("--reference-pmid")
 
+    verify = subparsers.add_parser("verify")
+    verify.add_argument("--image-path", required=True)
+    verify.add_argument("--figure-type", default="infographic")
+    verify.add_argument("--language", default="zh-TW")
+    verify.add_argument("--expected-label", action="append", dest="expected_labels")
+
     transform = subparsers.add_parser("transform")
     transform.add_argument("--image-path", required=True)
     transform.add_argument("--feedback", required=True)
     transform.add_argument("--output-path")
+
+    multi_turn_edit = subparsers.add_parser("multi-turn-edit")
+    multi_turn_edit.add_argument("--image-path", required=True)
+    multi_turn_edit.add_argument(
+        "--instruction",
+        action="append",
+        dest="instructions",
+        required=True,
+    )
+    multi_turn_edit.add_argument("--max-turns", type=int, default=5)
 
     batch = subparsers.add_parser("batch")
     batch.add_argument("--pmid", action="append", dest="pmids", required=True)
@@ -71,6 +88,7 @@ def main() -> int:
                 language=args.language,
                 output_size=args.output_size,
                 target_journal=args.target_journal,
+                expected_labels=args.expected_labels,
             )
         elif args.command == "generate":
             payload = _load_payload_file(args.payload_file) if args.payload_file else None
@@ -89,11 +107,24 @@ def main() -> int:
                 figure_type=args.figure_type,
                 reference_pmid=args.reference_pmid,
             )
+        elif args.command == "verify":
+            result = tools.verify_figure(
+                image_path=args.image_path,
+                expected_labels=args.expected_labels,
+                figure_type=args.figure_type,
+                language=args.language,
+            )
         elif args.command == "transform":
             result = tools.edit_figure(
                 image_path=args.image_path,
                 feedback=args.feedback,
                 output_path=args.output_path,
+            )
+        elif args.command == "multi-turn-edit":
+            result = tools.multi_turn_edit(
+                image_path=args.image_path,
+                instructions=args.instructions,
+                max_turns=args.max_turns,
             )
         else:
             result = tools.batch_generate(

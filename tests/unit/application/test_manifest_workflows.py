@@ -32,6 +32,7 @@ class StubPromptBuilder(PromptBuilder):
         figure_type: str,
         language: str,
         output_size: str,
+        expected_labels: list[str] | None = None,
     ) -> str:
         raise AssertionError("build_prompt should not run in retarget tests")
 

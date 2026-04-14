@@ -34,7 +34,7 @@ It now includes a YAML-backed journal registry so the MCP layer can inject figur
 
 This server targets the modern MCP Python SDK line and is intended to expose:
 
-- 5 execution tools for planning, generic generation, editing, evaluation, and batch workflows
+- 11 MCP tools for planning, generation, editing, evaluation, replay, retargeting, verification, and multi-step refinement workflows
 - resources for discovery of presets, templates, and Gemini image defaults
 - reusable prompts for figure planning and style transformation
 
@@ -62,6 +62,8 @@ The system is designed as a multi-step academic workflow:
 | `list_manifests` | `limit?` | Recent manifest metadata for replay or retargeting |
 | `replay_manifest` | `manifest_id`, `output_dir?` | Re-run a saved manifest using the original prompt and provider |
 | `retarget_journal` | `manifest_id`, `target_journal`, `output_dir?` | Regenerate with a new journal profile plus before/after diff |
+| `verify_figure` | `image_path`, `expected_labels?`, `figure_type?`, `language?` | Standalone quality-gate verdict with domain scores and exact-label verification |
+| `multi_turn_edit` | `image_path`, `instructions[]`, `max_turns?` | Iterative edit session for progressive refinement without restarting from scratch |
 
 `generate_figure` is now internally plan-first. If you pass a PMID directly, the server first builds a planning payload and then renders from that payload. The canonical contract remains `plan_figure` followed by `generate_figure(planned_payload=...)`.
 
@@ -75,6 +77,14 @@ The system is designed as a multi-step academic workflow:
 
 - `planned_payload` now accepts `render_route=composite_figure` with a `panels` list to assemble montage figures.
 - The built-in `composite_figure` tool remains available for direct multi-panel assembly with labels, caption, and DPI metadata.
+
+### CJK Text Fidelity & Self-Review
+
+- `plan_figure` now accepts `expected_labels` so exact text strings can be propagated into prompt construction and later verification.
+- Text-heavy CJK requests can be escalated toward higher-fidelity model selection and SVG-oriented routes automatically.
+- `generate_figure` can return a `quality_gate` block with domain scores, missing labels, and a pass/fail verdict.
+- `verify_figure` lets you run the same quality gate independently against any generated image.
+- `multi_turn_edit` keeps an edit session alive across multiple instructions, which is useful when fixing garbled labels or layout issues iteratively.
 
 ## Product Positioning
 
@@ -241,6 +251,13 @@ The same wrapper also supports direct planning and evaluation:
 ```bash
 uv run python scripts/start_afm_local.py run plan --pmid 41657234
 uv run python scripts/start_afm_local.py run evaluate --image-path .academic-figures/outputs/your-file.png
+```
+
+For exact-label generation and post-generation QA on text-heavy figures:
+
+```bash
+uv run python scripts/start_afm_local.py run plan --pmid 41657234 --language zh-TW --expected-label "腦中風" --expected-label "血栓移除術"
+uv run python scripts/start_afm_local.py run verify --image-path .academic-figures/outputs/your-file.png --language zh-TW --expected-label "腦中風"
 ```
 
 Windows PowerShell shortcut:

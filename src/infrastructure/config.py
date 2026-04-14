@@ -189,15 +189,17 @@ def load_config() -> ServerConfig:
     google_api_key = os.environ.get("GOOGLE_API_KEY", "")
     openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
     ollama_model = os.environ.get("OLLAMA_MODEL", _default_model_for(OLLAMA_PROVIDER))
+    default_model = (
+        ollama_model
+        if provider == OLLAMA_PROVIDER
+        else os.environ.get("GEMINI_MODEL", _default_model_for(provider))
+    )
 
     gemini = GeminiConfig(
         provider=provider,
         google_api_key=google_api_key,
         openrouter_api_key=openrouter_api_key,
-        default_model=os.environ.get(
-            "GEMINI_MODEL",
-            ollama_model if provider == OLLAMA_PROVIDER else _default_model_for(provider),
-        ),
+        default_model=default_model,
         high_fidelity_model=os.environ.get(
             "GEMINI_HIGH_FIDELITY_MODEL",
             _high_fidelity_model_for(provider),

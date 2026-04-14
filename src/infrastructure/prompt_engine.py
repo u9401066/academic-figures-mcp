@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.domain.interfaces import PromptBuilder
+from src.domain.value_objects import CJK_LANGUAGES
 from src.infrastructure.journal_registry import JournalRegistry
 
 if TYPE_CHECKING:
@@ -43,6 +44,7 @@ class PromptEngine(PromptBuilder):
         figure_type: str,
         language: str,
         output_size: str,
+        expected_labels: list[str] | None = None,
     ) -> str:
         block1 = (
             f"## Block 1: TITLE & PURPOSE\n"
@@ -67,7 +69,17 @@ class PromptEngine(PromptBuilder):
         block6 = self._get_style(figure_type)
         block7 = f"## Block 7: SIZE\ncanvas: {output_size}"
 
-        return "\n\n".join([block1, block2, block3, block4, block5, block6, block7])
+        blocks = [block1, block2, block3, block4, block5, block6, block7]
+
+        # Inject CJK exact-text fidelity block when language is CJK
+        cjk_block = self._build_cjk_text_block(
+            language=language,
+            expected_labels=expected_labels or [],
+        )
+        if cjk_block:
+            blocks.append(cjk_block)
+
+        return "\n\n".join(blocks)
 
     def inject_journal_requirements(
         self,
@@ -86,6 +98,54 @@ class PromptEngine(PromptBuilder):
             return prompt, profile
         journal_block = self._format_journal_profile_block(profile)
         return f"{prompt}\n\n{journal_block}", profile
+
+    # ── CJK text fidelity ─────────────────────────────────────
+
+    @staticmethod
+    def _build_cjk_text_block(
+        language: str,
+        expected_labels: list[str],
+    ) -> str:
+        """Build an explicit CJK text-rendering guardrail block.
+
+        Google recommends: "generate text first, then ask Gemini to place it
+        in the image". We enforce exact character fidelity by enumerating every
+        label the figure must contain.
+        """
+        if language not in CJK_LANGUAGES:
+            return ""
+
+        lines = [
+            "## Block 8: CJK TEXT FIDELITY",
+            f"target_script: {language}",
+            "CRITICAL RULES:",
+            "- Render every CJK character EXACTLY as listed below.",
+            "- Do NOT romanize, transliterate, or simplify CJK text.",
+            "- Do NOT replace Traditional Chinese with Simplified Chinese or vice-versa.",
+            "- Do NOT abbreviate or paraphrase any label.",
+            "- If a label cannot fit, scale the font smaller rather than truncating.",
+            "- Use a CJK-compatible sans-serif font (e.g., Noto Sans CJK, Source Han Sans).",
+            "- Place text on high-contrast backgrounds for legibility.",
+        ]
+
+        if expected_labels:
+            lines.append("")
+            lines.append("EXACT LABELS TO RENDER (copy character-by-character):")
+            for i, label in enumerate(expected_labels, 1):
+                lines.append(f"  {i}. 「{label}」")
+            lines.append("")
+            lines.append(
+                f"Total expected labels: {len(expected_labels)}. "
+                "Verify all are present and correctly rendered."
+            )
+        else:
+            lines.append("")
+            lines.append(
+                "No specific labels provided. Ensure ANY text rendered in the "
+                "figure uses correct CJK characters for the target script."
+            )
+
+        return "\n".join(lines)
 
     # ── Loading helpers ─────────────────────────────────────
 
