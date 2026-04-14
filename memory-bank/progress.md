@@ -2,13 +2,13 @@
 
 ## Done
 
-- Aligned AFM README with Zotero Keeper-style cross-platform onboarding by adding VS Code one-click MCP install links, uvx package-mode examples, Claude Desktop config, and cross-platform notes.
-- Validated the published package entrypoint with `uvx --from academic-figures-mcp afm-run --help`.
+- Published AFM v0.4.1 with packaged VS Code extension onboarding fixes, bundled markdown docs, and cross-platform install guidance.
+- Added a GitHub Actions package-smoke matrix and fixed its Windows Unicode output issue by forcing UTF-8 for the uvx child process.
 
 ## Doing
 
-- Keeping AFM's package-mode install path and docs consistent across macOS, Linux, and Windows.
+- Keeping main green after the 0.4.1 release by landing the post-release Windows package-smoke fix.
 
 ## Next
 
-- Include the same package-mode install guidance in the next patch release so users get the improved cross-platform onboarding immediately.
+- Verify the follow-up main CI run succeeds after the Windows package-smoke UTF-8 fix.

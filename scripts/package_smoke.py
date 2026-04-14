@@ -58,6 +58,8 @@ def main() -> int:
                 "UV_NO_PROGRESS": "1",
                 "AFM_METADATA_SOURCE": "file",
                 "AFM_METADATA_FILE": str(metadata_path),
+                "PYTHONIOENCODING": "utf-8",
+                "PYTHONUTF8": "1",
             }
         )
 
