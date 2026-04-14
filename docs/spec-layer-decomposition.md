@@ -47,6 +47,7 @@ A layer is a rectangular region of the generated figure that corresponds to one 
 | `image_bytes` | `bytes` | Cropped/masked image data for this layer |
 | `z_index` | `int` | Stacking order |
 | `style` | `LayerStyle` | Editable visual properties |
+| `parent_group_id` | `str \| None` | ID of the LayerGroup this layer belongs to (None = top-level) |
 | `metadata` | `dict` | Free-form metadata (source prompt region, etc.) |
 
 ### 2.2 LayerCategory (Value Object)
@@ -57,7 +58,9 @@ title               — figure title text block
 subtitle            — subtitle or section header
 text_block          — body text, annotation, or footnote
 label               — panel label (A, B, C) or axis label
-arrow               — directional arrow or connector
+arrow               — directional arrow or connector line
+connector           — line, polyline, or curve linking two nodes (with optional mid-label)
+flowchart_node      — a process / decision / terminal box in a flowchart
 icon                — small symbolic element (drug icon, organ icon)
 anatomical_region   — anatomical illustration area
 data_chart          — chart, graph, or statistical plot
@@ -66,9 +69,43 @@ border              — decorative border or frame element
 legend              — figure legend or color key
 citation            — PMID / reference text block
 watermark           — overlay watermark or badge
+group_frame         — invisible bounding frame for a LayerGroup (no own pixels)
 ```
 
-### 2.3 FigureScene (Aggregate Root)
+### 2.3 LayerGroup (Value Object)
+
+A `LayerGroup` bundles related layers into a logical unit — similar to "Group" in PowerPoint/PPTX, Figma, or SVG `<g>`. Groups can nest, forming a tree.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `group_id` | `str` | Unique group identifier within the scene |
+| `label` | `str` | Human-readable group name (e.g., `step_3_decision`) |
+| `category` | `GroupCategory` | Semantic type (see §2.3.1) |
+| `children` | `list[str]` | Ordered list of child `layer_id` or `group_id` values |
+| `bbox` | `BoundingBox` | Union bounding box auto-computed from children |
+| `collapsed` | `bool` | If `True`, the group is presented as a single opaque unit during editing |
+| `metadata` | `dict` | Free-form metadata |
+
+**Key rules:**
+
+1. A `Layer` with `parent_group_id` set is a child of that group. A layer with `parent_group_id = None` is a top-level element.
+2. Groups can contain other groups (nesting). Depth is capped at 4 levels to prevent runaway recursion.
+3. **Group-level operations**: moving, scaling, or restyling a group applies the transform to every descendant. This mirrors the "select group → drag" interaction in PPTX.
+4. `bbox` on a group is always the tightest rectangle enclosing all children. It is recomputed whenever a child moves or resizes.
+
+#### 2.3.1 GroupCategory
+
+```
+flowchart_step      — a box + its inner text + outgoing connectors
+flowchart_branch    — a decision diamond + yes/no labels + branch connectors
+flowchart_swimlane  — a named column or row containing multiple steps
+panel_group         — all layers belonging to one sub-panel
+legend_group        — legend key items grouped together
+annotation_cluster  — a set of callout lines + text labels pointing to one region
+composite_block     — arbitrary user-defined grouping
+```
+
+### 2.4 FigureScene (Aggregate Root)
 
 A `FigureScene` is the top-level domain entity that owns all layers for one generated figure.
 
@@ -79,11 +116,12 @@ A `FigureScene` is the top-level domain entity that owns all layers for one gene
 | `canvas_width` | `int` | Original image width in px |
 | `canvas_height` | `int` | Original image height in px |
 | `layers` | `list[Layer]` | Ordered list of decomposed layers |
+| `groups` | `list[LayerGroup]` | Hierarchical grouping of layers (may be empty) |
 | `created_at` | `datetime` | Timestamp |
 | `decomposition_model` | `str` | Model/method used for segmentation |
 | `decomposition_confidence` | `float` | Overall segmentation quality score |
 
-### 2.4 BoundingBox (Value Object)
+### 2.5 BoundingBox (Value Object)
 
 ```python
 @dataclass(frozen=True)
@@ -94,7 +132,7 @@ class BoundingBox:
     height: int
 ```
 
-### 2.5 LayerStyle (Value Object)
+### 2.6 LayerStyle (Value Object)
 
 ```python
 @dataclass(frozen=True)
@@ -115,8 +153,8 @@ class LayerStyle:
 
 ```
 domain/
-  entities.py          ← FigureScene, Layer (new)
-  value_objects.py     ← LayerCategory, BoundingBox, LayerStyle (new)
+  entities.py          ← FigureScene, Layer, LayerGroup (new)
+  value_objects.py     ← LayerCategory, GroupCategory, BoundingBox, LayerStyle (new)
   interfaces.py        ← ImageSegmenter, SceneStore (new ABCs)
 
 application/
@@ -137,6 +175,13 @@ presentation/
 ### 3.2 New Domain Interfaces
 
 ```python
+@dataclass
+class SegmentationResult:
+    """Output of a segmentation pass: layers + optional groupings."""
+    layers: list[Layer]
+    groups: list[LayerGroup]   # may be empty for flat segmentation
+
+
 class ImageSegmenter(ABC):
     """Segments a flat image into semantic layers."""
 
@@ -148,7 +193,7 @@ class ImageSegmenter(ABC):
         figure_type: str,
         language: str,
         expected_labels: list[str] | None = None,
-    ) -> list[Layer]: ...
+    ) -> SegmentationResult: ...
 
 
 class SceneStore(ABC):
@@ -384,8 +429,51 @@ Scenes are stored under `.academic-figures/scenes/` as JSON + layer image files:
       "bbox": {"x": 100, "y": 20, "width": 2200, "height": 60},
       "z_index": 10,
       "style": {"opacity": 1.0, "font_size": 36},
+      "parent_group_id": null,
       "image_file": "layer-title.png",
       "mask_file": null
+    },
+    {
+      "layer_id": "step1-box",
+      "label": "Step 1: Patient Assessment",
+      "category": "flowchart_node",
+      "bbox": {"x": 800, "y": 200, "width": 400, "height": 120},
+      "z_index": 5,
+      "style": {"opacity": 1.0, "fill_color": "#E3F2FD"},
+      "parent_group_id": "grp-step1",
+      "image_file": "layer-step1-box.png",
+      "mask_file": null
+    },
+    {
+      "layer_id": "step1-text",
+      "label": "Assessment criteria text",
+      "category": "text_block",
+      "bbox": {"x": 820, "y": 220, "width": 360, "height": 80},
+      "z_index": 6,
+      "style": {"opacity": 1.0, "font_size": 14},
+      "parent_group_id": "grp-step1",
+      "image_file": "layer-step1-text.png",
+      "mask_file": null
+    }
+  ],
+  "groups": [
+    {
+      "group_id": "grp-step1",
+      "label": "Step 1 — Patient Assessment",
+      "category": "flowchart_step",
+      "children": ["step1-box", "step1-text"],
+      "bbox": {"x": 800, "y": 200, "width": 400, "height": 120},
+      "collapsed": false,
+      "metadata": {}
+    },
+    {
+      "group_id": "grp-main-flow",
+      "label": "Main flowchart path",
+      "category": "composite_block",
+      "children": ["grp-step1", "grp-step2", "connector-1-2"],
+      "bbox": {"x": 200, "y": 200, "width": 1800, "height": 1200},
+      "collapsed": false,
+      "metadata": {}
     }
   ]
 }
