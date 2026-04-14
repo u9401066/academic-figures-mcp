@@ -101,8 +101,39 @@ Mapped user requirements:
 1. Prompt persistence and replay. ✅
 2. Journal retargeting for existing assets. ✅
 3. Grouped figure planning and composite assembly. ▶️ composite route shipped; grouped planning next.
-4. Poster-specific planning and export.
-5. Image-to-style extraction and reuse.
+4. Layer-aware image decomposition (vision-model, Phase 1). ⏳ spec complete.
+5. Poster-specific planning and export.
+6. Precision segmentation and editable export (Phase 2).
+7. Image-to-style extraction and reuse.
+8. Native layered generation (Phase 3).
+
+### Theme 5: Layer-Aware Image Decomposition
+
+Status: planned (spec complete, implementation not started)
+
+Goals:
+
+- Transform flat generated figures into editable scene graphs of individually adjustable layer objects.
+- Enable per-layer editing (move, resize, restyle, replace, remove) without regenerating the entire figure.
+- Export decomposed scenes to editable formats (SVG, PSD) for handoff to professional editors.
+- Evolve toward native layered generation that produces pre-decomposed scene graphs without post-hoc segmentation.
+
+Planned deliverables:
+
+- Vision-model layer decomposition using Gemini (Phase 1). ⏳ Spec complete in `docs/spec-layer-decomposition.md`.
+- Precision segmentation with SAM2/GroundingDINO for pixel-perfect masks (Phase 2).
+- Native layered generation pipeline producing per-element images on transparent backgrounds (Phase 3).
+- MCP tools: `decompose_figure`, `edit_layer`, `recompose_scene`, `list_scenes`, `export_scene`.
+- FigureScene aggregate root in domain layer with Layer entities, BoundingBox and LayerStyle value objects.
+
+Mapped user requirements:
+
+- Core differentiator vs. Google NotebookLM and other multi-step generators.
+- Requirement for precise, non-destructive editing of generated academic figures.
+- Requirement for editable export to professional tools (Inkscape, Illustrator, Figma).
+
+Full specification: [`docs/spec-layer-decomposition.md`](docs/spec-layer-decomposition.md)
+Strategic roadmap: [`docs/roadmap-v2.md`](docs/roadmap-v2.md)
 
 ## Out of Scope for This Roadmap
 
