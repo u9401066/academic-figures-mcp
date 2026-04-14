@@ -33,7 +33,7 @@ def load_font(size: int):
     ]:
         try:
             return ImageFont.truetype(p, size)
-        except (IOError, OSError):
+        except OSError:
             continue
     return ImageFont.load_default()
 
@@ -59,21 +59,26 @@ panel_right_x = MARGIN + (CANVAS_W - 2 * MARGIN - PANEL_GAP) // 2
 panel_w = (CANVAS_W - 2 * MARGIN - PANEL_GAP) // 2
 panel_h = CANVAS_H - TITLE_H - FOOTER_H - 2 * MARGIN - 40
 
+
 def paste_panel(img, x):
     img_resized = img.resize((panel_w, panel_h), Image.LANCZOS)
     canvas.paste(img_resized, (x, panel_top))
+
 
 paste_panel(img_left, panel_left_x)
 paste_panel(img_right, panel_right_x)
 
 # Labels
 label_font = load_font(32)
-for lbl, px in zip(LABELS, [panel_left_x, panel_right_x]):
+for lbl, px in zip(LABELS, [panel_left_x, panel_right_x], strict=True):
     lb = draw.textbbox((0, 0), lbl, font=label_font)
     lw, lh = lb[2] - lb[0] + 20, lb[3] - lb[1] + 16
     draw.rounded_rectangle(
         [px + 10, panel_top + 10, px + 10 + lw, panel_top + 10 + lh],
-        radius=8, fill="#FFFFFF", outline="#CCCCCC", width=1,
+        radius=8,
+        fill="#FFFFFF",
+        outline="#CCCCCC",
+        width=1,
     )
     draw.text((px + 20, panel_top + 18), lbl, fill="#1A1A2E", font=label_font)
 
@@ -89,4 +94,4 @@ draw.text((MARGIN, footer_y + 25), CITATION, fill="#888888", font=load_font(16))
 # Save
 canvas.save(OUTPUT, dpi=(DPI, DPI))
 print(f"✅ Composite saved: {OUTPUT}")
-print(f"   {CANVAS_W}×{CANVAS_H} @ {DPI} DPI = {CANVAS_W/DPI:.1f}\"×{CANVAS_H/DPI:.1f}\"")
+print(f'   {CANVAS_W}x{CANVAS_H} @ {DPI} DPI = {CANVAS_W / DPI:.1f}"x{CANVAS_H / DPI:.1f}"')

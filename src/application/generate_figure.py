@@ -316,10 +316,7 @@ class GenerateFigureUseCase:
 
         base_dir = Path(output_dir or self._output_dir)
         base_dir.mkdir(parents=True, exist_ok=True)
-        out_path = (
-            base_dir
-            / f"{self._slugify(normalized_title)}_composite_{int(time.time())}.png"
-        )
+        out_path = base_dir / f"{self._slugify(normalized_title)}_composite_{int(time.time())}.png"
         compose_result = self._composer.compose(
             panels=panels,
             title=normalized_title,
@@ -447,7 +444,7 @@ class GenerateFigureUseCase:
     @staticmethod
     def _default_label(index: int) -> str:
         base = ord("A") + index
-        return chr(base) if 0 <= base <= ord("Z") else f"P{index+1}"
+        return chr(base) if 0 <= base <= ord("Z") else f"P{index + 1}"
 
     def _resolve_title(self, *, payload: dict[str, Any], asset_kind: str) -> str:
         source_context = payload.get("source_context")
