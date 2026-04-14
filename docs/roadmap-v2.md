@@ -25,7 +25,9 @@ This gives researchers something NotebookLM, SCIdrawer, and FigureFlow cannot: g
 | Quality gate / verification | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **Layer decomposition** | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **Per-layer editing** | ❌ | ❌ | ❌ | ❌ | ✅ |
-| **SVG/PSD export** | ❌ | ❌ | ✅ (code) | ❌ | ✅ |
+| **Object grouping (PPTX-like)** | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **Flowchart-aware segmentation** | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **SVG/PPTX/PSD export** | ❌ | ❌ | ✅ (code) | ❌ | ✅ |
 | **Native layered generation** | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ## Roadmap Phases
@@ -54,52 +56,55 @@ This gives researchers something NotebookLM, SCIdrawer, and FigureFlow cannot: g
 
 **Status**: Planned — the core differentiator begins here.
 
-**Theme**: Generate a flat figure, then decompose it into editable layers using Gemini vision.
+**Theme**: Generate a flat figure, then decompose it into editable layers **with hierarchical grouping** using Gemini vision. Export to SVG and PPTX for professional editing.
 
 **Technical Spec**: [`docs/spec-layer-decomposition.md`](spec-layer-decomposition.md)
 
 | Deliverable | Priority | Notes |
 |-------------|----------|-------|
-| `FigureScene`, `Layer` domain entities | P0 | New aggregate root in domain layer |
-| `LayerCategory`, `BoundingBox`, `LayerStyle` value objects | P0 | Frozen dataclasses |
-| `ImageSegmenter` domain interface | P0 | ABC for pluggable segmentation |
-| `GeminiSegmenter` infrastructure adapter | P0 | Uses Gemini vision for bbox detection |
-| `FileSceneStore` infrastructure adapter | P0 | JSON + cropped PNGs under `.academic-figures/scenes/` |
-| `PillowSceneRenderer` infrastructure adapter | P0 | Re-renders scene from layers |
-| `DecomposeFigureUseCase` | P0 | Core use case |
-| `EditLayerUseCase` | P0 | move, resize, restyle, remove, reorder |
+| `FigureScene`, `Layer`, `LayerGroup` domain entities | P0 | Hierarchical scene graph with group nesting (spec §2.1–2.4) |
+| `LayerCategory`, `GroupCategory`, `BoundingBox`, `LayerStyle` value objects | P0 | Includes `flowchart_node`, `connector`, `group_frame` categories |
+| `ImageSegmenter` domain interface | P0 | Returns `SegmentationResult` (layers + groups) |
+| `GeminiSegmenter` infrastructure adapter | P0 | Figure-type-aware strategies (spec §4.4) |
+| Flowchart two-pass hierarchical segmentation | P0 | Structure detection → intra-node decomposition → connector binding (spec §4.4.1) |
+| `decomposition_depth` parameter | P0 | `shallow` / `standard` / `deep` granularity knob |
+| `FileSceneStore` infrastructure adapter | P0 | JSON + cropped PNGs; stores groups in scene JSON |
+| `PillowSceneRenderer` infrastructure adapter | P0 | Re-renders scene from layers respecting group z-order |
+| `DecomposeFigureUseCase` | P0 | Core use case with figure-type dispatch |
+| `EditLayerUseCase` | P0 | move, resize, restyle, remove, reorder + **group, ungroup** |
 | `RecomposeSceneUseCase` | P0 | Flatten scene back to image |
 | MCP tools: `decompose_figure`, `edit_layer`, `recompose_scene`, `list_scenes` | P0 | Thin presentation handlers |
+| `export_scene` MCP tool — SVG export | P0 | Groups → `<g>` elements; text → `<text>` elements (spec §5.5.2) |
+| `export_scene` MCP tool — PPTX export | P0 | Groups → PPTX GroupShapes; text → TextBox shapes (spec §5.5.1) |
 | Decomposition quality score | P1 | Coverage + overlap + label match |
 | Unit tests for domain types | P0 | |
 | Integration test: decompose → edit → recompose | P1 | |
 | Selective layer regeneration (`replace` action) | P1 | Regen one layer via Gemini |
 
-**Exit criteria**: A user can generate a figure, decompose it, edit individual layers, and recompose. MCP tools work end-to-end. Unit + integration tests pass.
+**Exit criteria**: A user can generate a flowchart, decompose it into grouped layers (each box + text = one group), edit individual layers or whole groups (PPTX-like), recompose, and export to SVG or PPTX with preserved grouping. MCP tools work end-to-end. Unit + integration tests pass.
 
-**New dependencies**: None (uses existing Gemini + Pillow).
+**New dependencies**: `python-pptx` (MIT, pure Python, no native deps).
 
 ---
 
-### Phase 2: Precision Segmentation and Export (v0.6.0 → v0.8.0)
+### Phase 2: Precision Segmentation and Advanced Export (v0.6.0 → v0.8.0)
 
 **Status**: Discovery
 
-**Theme**: Pixel-perfect masks, non-rectangular layers, and editable export formats.
+**Theme**: Pixel-perfect masks, non-rectangular layers, PSD export, and enhanced connector fidelity.
 
 | Deliverable | Priority | Notes |
 |-------------|----------|-------|
 | `SAMSegmenter` adapter (SAM2 + GroundingDINO) | P0 | Optional extra; Gemini path remains default |
-| Alpha mask support in Layer + SceneRenderer | P0 | Non-rectangular elements |
-| `export_scene` MCP tool | P0 | SVG primary, PSD best-effort |
-| SVG export: each layer → `<g>` element | P0 | Opens in Inkscape/Illustrator |
-| PSD export via `psd-tools` | P2 | Best-effort Photoshop compat |
+| Alpha mask support in Layer + SceneRenderer | P0 | Non-rectangular elements (arrows, anatomical regions) |
+| PSD export via `psd-tools` | P1 | Best-effort Photoshop compat with layer groups |
+| PPTX connector anchoring refinement | P1 | True connector shapes with begin/end anchors |
 | Decomposition quality gate automation | P1 | Warn below threshold |
 | Configurable segmenter selection | P1 | Provider config: `gemini` vs `sam` |
-| CJK text-layer special handling | P1 | Text detection before crop |
+| CJK text-layer special handling | P1 | Text detection before crop; OCR fallback for PPTX text |
 | Scene version history (undo support) | P2 | `scene-v1.json`, `scene-v2.json` |
 
-**Exit criteria**: Pixel-perfect layer masks for non-rectangular elements. SVG export opens correctly in Inkscape. Quality gate warns on low-confidence decomposition.
+**Exit criteria**: Pixel-perfect layer masks for non-rectangular elements. PSD export opens correctly in Photoshop with layer groups. Quality gate warns on low-confidence decomposition.
 
 **New dependencies**: `segment-anything-2` (optional), `groundingdino` (optional), `psd-tools` (optional).
 
@@ -115,7 +120,7 @@ This gives researchers something NotebookLM, SCIdrawer, and FigureFlow cannot: g
 |-------------|----------|-------|
 | Per-element generation pipeline | P0 | Generate each semantic element separately on transparent BG |
 | Automatic scene assembly during generation | P0 | Compose layers into FigureScene during generation, not after |
-| Layer-aware planning | P0 | Planner recommends layer structure and element list |
+| Layer-aware planning | P0 | Planner recommends layer structure, group hierarchy, and element list |
 | Recompose fidelity check | P1 | Compare recomposed vs. flat-generated for drift |
 | Figma-JSON export format | P2 | Import directly into Figma |
 | Layer-aware journal retargeting | P1 | Retarget per-layer styles to new journal profile |
@@ -185,14 +190,16 @@ v1.0.0  ── ★ Native layered generation — full scene-graph pipeline
 When complete, Academic Figures MCP will be the only tool that provides:
 
 1. **PMID → planned academic figure** (existing moat)
-2. **Flat image → editable layer scene graph** (new moat, Phase 1)
-3. **Per-layer precision editing** via MCP without Photoshop (new moat, Phase 1)
-4. **Pixel-perfect segmentation** for non-rectangular academic elements (Phase 2)
-5. **SVG/PSD export** for handoff to professional editors (Phase 2)
-6. **Native layered generation** eliminating post-hoc segmentation entirely (Phase 3)
-7. **Journal-aware layer-level retargeting** (Phase 3)
+2. **Flat image → editable layer scene graph with hierarchical grouping** (new moat, Phase 1)
+3. **Per-layer and per-group precision editing** via MCP — like PPTX object editing but for academic figures (new moat, Phase 1)
+4. **Figure-type-aware decomposition** — flowchart nodes auto-grouped, connectors linked, statistical series isolated (new moat, Phase 1)
+5. **SVG and PPTX export** with preserved grouping for handoff to professional editors and presentations (new moat, Phase 1)
+6. **Pixel-perfect segmentation** for non-rectangular academic elements (Phase 2)
+7. **PSD export** for Photoshop workflows (Phase 2)
+8. **Native layered generation** eliminating post-hoc segmentation entirely (Phase 3)
+9. **Journal-aware layer-level retargeting** (Phase 3)
 
-This transforms the product from "an academic image generator" into "an academic figure editor with AI generation built in" — a fundamentally different and more defensible category.
+This transforms the product from "an academic image generator" into "an academic figure editor with AI generation built in" — a fundamentally different and more defensible category. The PPTX-like grouping model makes it immediately familiar to academic users who already think in PowerPoint.
 
 ## Out of Scope
 
