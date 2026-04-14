@@ -1,5 +1,11 @@
 # 🎨 Academic Figures MCP
 
+[![PyPI version](https://img.shields.io/pypi/v/academic-figures-mcp)](https://pypi.org/project/academic-figures-mcp/)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/u9401066.academic-figures-mcp)](https://marketplace.visualstudio.com/items?itemName=u9401066.academic-figures-mcp)
+[![CI](https://github.com/u9401066/academic-figures-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/u9401066/academic-figures-mcp/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/u9401066/academic-figures-mcp)](LICENSE)
+[![Python 3.10+](https://img.shields.io/pypi/pyversions/academic-figures-mcp)](https://pypi.org/project/academic-figures-mcp/)
+
 **A multi-step academic figure agent harness for AI agents and non-engineers.**
 
 Academic Figures MCP is a workflow harness for multi-step academic reasoning and figure production. PMID ingestion is one structured entry point, but the real product value is helping an agent move through academic planning, concept decomposition, figure-type selection, prompt orchestration, image generation, evaluation, and iteration until it reaches a publication-grade result. MCP exposure and VSX packaging make that workflow usable without requiring engineering-heavy setup.

@@ -45,3 +45,25 @@ Journal figure requirements are stored as machine-readable YAML profiles and res
 - src/infrastructure/prompt_engine.py
 - src/application/plan_figure.py
 - src/application/generate_figure.py
+
+
+## Thin presentation handlers with use-case delegation
+
+MCP tools should validate/normalize input and then delegate orchestration to application use cases. Presentation code should not construct or control infrastructure implementations directly; cross-layer behavior should flow through domain interfaces and the dependency container.
+
+### Examples
+
+- src/presentation/tools.py
+- src/application/composite_figure.py
+- src/presentation/dependencies.py
+
+
+## Detect bitmap media type from content, not extension
+
+External image providers may return JPEG bytes even when older flows or callers assume a `.png` filename. Normalize media type from magic bytes at the infrastructure boundary and derive output paths from the resulting `GenerationResult.file_extension` so saved files always match their real encoding.
+
+### Examples
+
+- src/infrastructure/gemini_adapter.py
+- src/application/edit_figure.py
+- src/domain/entities.py

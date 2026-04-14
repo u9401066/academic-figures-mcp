@@ -1,0 +1,131 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"          # triggers on v0.3.0, v1.0.0, etc.
+
+permissions:
+  contents: read
+
+env:
+  UV_CACHE_DIR: .uv-cache
+
+jobs:
+  # ==========================================
+  # 先跑 CI 確認品質
+  # ==========================================
+  quality-gate:
+    name: 🔍 Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      - run: uv run ruff check . --output-format=github
+      - run: uv run ruff format --check .
+      - run: uv run mypy src/ --config-file pyproject.toml
+      - run: uv run bandit -r src/ -c pyproject.toml -q
+      - run: uv run pytest tests/ -x -q --tb=short
+
+  # ==========================================
+  # Build Python sdist + wheel
+  # ==========================================
+  build-python:
+    name: 📦 Build Python Package
+    needs: [quality-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Verify tag matches package version
+        run: |
+          PKG_VERSION=$(python -c "
+          import tomllib, pathlib
+          data = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+          print(data['project']['version'])
+          ")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ Tag version ($TAG_VERSION) != pyproject.toml version ($PKG_VERSION)"
+            exit 1
+          fi
+          echo "✅ Version match: $PKG_VERSION"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+
+  # ==========================================
+  # Publish to PyPI (Trusted Publisher / OIDC)
+  # ==========================================
+  publish-pypi:
+    name: 🚀 Publish to PyPI
+    needs: [build-python]
+    runs-on: ubuntu-latest
+    environment: pypi          # GitHub Environment with OIDC trust
+    permissions:
+      id-token: write          # required for Trusted Publisher
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No API token needed — uses OIDC Trusted Publisher
+
+  # ==========================================
+  # Build & Publish VS Code Extension
+  # ==========================================
+  publish-vscode:
+    name: 🧩 Publish VS Code Extension
+    needs: [quality-gate]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vscode-extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches extension version
+        run: |
+          EXT_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$EXT_VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ Tag version ($TAG_VERSION) != package.json version ($EXT_VERSION)"
+            exit 1
+          fi
+          echo "✅ Version match: $EXT_VERSION"
+
+      - name: Package VSIX
+        run: npx @vscode/vsce package
+
+      - name: Publish to VS Code Marketplace
+        run: npx @vscode/vsce publish
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX Registry
+        run: npx ovsx publish *.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        continue-on-error: true  # Open VSX is optional
