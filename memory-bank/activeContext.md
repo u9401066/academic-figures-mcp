@@ -2,8 +2,9 @@
 
 ## Current Goals
 
-- Finalizing pre-tag hardening for academic-figures-mcp: keep release automation stable while making metadata retrieval pluggable through the existing MetadataFetcher boundary.
+- Verify CI matrix health and package-mode coverage across macOS, Windows, and Linux.
+- Ship an offline-safe stub provider + smoke workflow that still exercises planning, generation, manifest writes, and saved image outputs without API keys.
 
 ## Current Blockers
 
-- No code blockers. Remaining release blocker is external: VS Code Marketplace still needs a valid VSCE PAT because that ecosystem does not support PyPI-style Trusted Publisher OIDC.
+- None. Marketplace publishing still depends on a VSCE PAT, but it does not block the current CI/smoke hardening work.

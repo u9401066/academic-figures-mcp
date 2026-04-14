@@ -343,6 +343,12 @@ For local development with the newer MCP SDK transport options, the server defau
 - Environment parsing already accepts `KEY=value`, `export KEY=value`, and `set KEY=value`, so the same env profile can be reused across Bash, Zsh, Fish-style exports, and PowerShell/CMD-oriented files.
 - The VS Code extension falls back to package mode through `uvx` when no local source tree is detected, which is the safest route for non-developer users on all three platforms.
 
+## CI Matrix & Offline Smoke
+
+- CI covers lint/format, mypy, and bandit on Linux; pytest on macOS, Windows, and Linux for Python 3.10–3.12; plus package-mode smoke on all three OS targets.
+- Package smoke now uses `AFM_IMAGE_PROVIDER=stub` to verify `uvx` install, planning, generation, manifest writes, and saved output images without real provider keys.
+- Run the same offline smoke locally: `uv run python scripts/package_smoke.py` (writes stub output + manifests to a temp directory).
+
 ## Architecture
 
 ```text
