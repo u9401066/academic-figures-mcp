@@ -51,6 +51,11 @@ def main() -> int:
         tmp_path = Path(tmp_dir)
         metadata_path = tmp_path / "papers.json"
         metadata_path.write_text(json.dumps(SMOKE_METADATA), encoding="utf-8")
+        planned_payload_path = tmp_path / "planned_payload.json"
+        output_dir = tmp_path / "outputs"
+        manifest_dir = tmp_path / "manifests"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        manifest_dir.mkdir(parents=True, exist_ok=True)
 
         env = os.environ.copy()
         env.update(
@@ -58,6 +63,9 @@ def main() -> int:
                 "UV_NO_PROGRESS": "1",
                 "AFM_METADATA_SOURCE": "file",
                 "AFM_METADATA_FILE": str(metadata_path),
+                "AFM_IMAGE_PROVIDER": "stub",
+                "AFM_OUTPUT_DIR": str(output_dir),
+                "AFM_MANIFEST_DIR": str(manifest_dir),
                 "PYTHONIOENCODING": "utf-8",
                 "PYTHONUTF8": "1",
             }
@@ -99,12 +107,89 @@ def main() -> int:
         if not isinstance(payload.get("planned_payload"), dict):
             return _fail("plan", plan_result, "planning smoke did not return planned_payload")
 
+        planned_payload_path.write_text(
+            json.dumps(payload["planned_payload"]),
+            encoding="utf-8",
+        )
+
+        generate_result = _run(
+            [
+                "uvx",
+                "--from",
+                ".",
+                "afm-run",
+                "generate",
+                "--payload-file",
+                str(planned_payload_path),
+                "--output-dir",
+                str(output_dir),
+            ],
+            repo_root,
+            env,
+        )
+        if generate_result.returncode != 0:
+            return _fail("generate", generate_result, "package-mode generation smoke failed")
+
+        try:
+            generate_payload = json.loads(generate_result.stdout)
+        except json.JSONDecodeError:
+            return _fail(
+                "generate",
+                generate_result,
+                "package-mode generation smoke returned invalid JSON",
+            )
+
+        if generate_payload.get("status") != "ok":
+            return _fail("generate", generate_result, "generation smoke returned non-ok status")
+
+        output_path = Path(str(generate_payload.get("output_path", "")))
+        if not output_path.exists():
+            return _fail("generate", generate_result, "generation smoke did not write output_path")
+
+        if output_path.stat().st_size == 0:
+            return _fail("generate", generate_result, "generated image is empty")
+
+        manifest_files = sorted(manifest_dir.glob("*.json"))
+        if not manifest_files:
+            return _fail("generate", generate_result, "generation did not write manifest files")
+
+        verify_result = _run(
+            [
+                "uvx",
+                "--from",
+                ".",
+                "afm-run",
+                "verify",
+                "--image-path",
+                str(output_path),
+                "--expected-label",
+                "stub figure",
+            ],
+            repo_root,
+            env,
+        )
+        if verify_result.returncode != 0:
+            return _fail("verify", verify_result, "package-mode verify smoke failed")
+
+        try:
+            verify_payload = json.loads(verify_result.stdout)
+        except json.JSONDecodeError:
+            return _fail("verify", verify_result, "package-mode verify returned invalid JSON")
+
+        if verify_payload.get("status") != "ok":
+            return _fail("verify", verify_result, "verify smoke returned non-ok status")
+
+        if verify_payload.get("passed") is not True:
+            return _fail("verify", verify_result, "verify smoke did not pass quality gate")
+
         summary = {
             "stage": "package-smoke",
             "status": "ok",
             "pmid": payload.get("pmid"),
             "selected_figure_type": payload.get("selected_figure_type"),
             "render_route": payload.get("render_route"),
+            "output_path": str(output_path),
+            "manifest_count": len(manifest_files),
         }
         print(json.dumps(summary, ensure_ascii=False))
         return 0

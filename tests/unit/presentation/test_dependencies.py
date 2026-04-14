@@ -8,8 +8,9 @@ from unittest.mock import patch
 import pytest
 
 from src.domain.exceptions import ConfigurationError
-from src.infrastructure.config import ServerConfig
+from src.infrastructure.config import STUB_PROVIDER, GeminiConfig, ServerConfig
 from src.infrastructure.file_metadata_fetcher import FileMetadataFetcher
+from src.infrastructure.stub_image_generator import StubImageGenerator, StubImageVerifier
 from src.presentation.dependencies import Container
 
 if TYPE_CHECKING:
@@ -55,3 +56,12 @@ class TestContainerReset:
 
         with pytest.raises(ConfigurationError, match="AFM_METADATA_FILE"):
             _ = Container.get().fetcher
+
+    @patch("src.presentation.dependencies.load_config")
+    def test_stub_provider_uses_offline_paths(self, mock_cfg: object) -> None:
+        mock_cfg.return_value = ServerConfig(gemini=GeminiConfig(provider=STUB_PROVIDER))
+
+        container = Container.get()
+
+        assert isinstance(container.generator, StubImageGenerator)
+        assert isinstance(container.verifier, StubImageVerifier)

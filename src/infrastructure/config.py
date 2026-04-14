@@ -8,10 +8,11 @@ from dataclasses import dataclass, field
 GOOGLE_PROVIDER = "google"
 OPENROUTER_PROVIDER = "openrouter"
 OLLAMA_PROVIDER = "ollama"
+STUB_PROVIDER = "stub"
 METADATA_SOURCE_PUBMED = "pubmed"
 METADATA_SOURCE_FILE = "file"
 
-_SUPPORTED_PROVIDERS = {GOOGLE_PROVIDER, OPENROUTER_PROVIDER, OLLAMA_PROVIDER}
+_SUPPORTED_PROVIDERS = {GOOGLE_PROVIDER, OPENROUTER_PROVIDER, OLLAMA_PROVIDER, STUB_PROVIDER}
 _SUPPORTED_TRANSPORTS = {"stdio", "sse", "streamable-http"}
 _SUPPORTED_METADATA_SOURCES = {METADATA_SOURCE_PUBMED, METADATA_SOURCE_FILE}
 
@@ -31,6 +32,8 @@ def _normalize_metadata_source(value: str) -> str:
 
 
 def _default_model_for(provider: str) -> str:
+    if provider == STUB_PROVIDER:
+        return "stub-generator"
     if provider == OPENROUTER_PROVIDER:
         return "google/gemini-3.1-flash-image-preview"
     if provider == OLLAMA_PROVIDER:
@@ -39,6 +42,8 @@ def _default_model_for(provider: str) -> str:
 
 
 def _high_fidelity_model_for(provider: str) -> str:
+    if provider == STUB_PROVIDER:
+        return "stub-generator"
     if provider == OPENROUTER_PROVIDER:
         return "google/gemini-3-pro-image-preview"
     if provider == OLLAMA_PROVIDER:
@@ -47,6 +52,8 @@ def _high_fidelity_model_for(provider: str) -> str:
 
 
 def _low_latency_model_for(provider: str) -> str:
+    if provider == STUB_PROVIDER:
+        return "stub-generator"
     if provider == OPENROUTER_PROVIDER:
         return "google/gemini-2.5-flash-image"
     if provider == OLLAMA_PROVIDER:
@@ -124,6 +131,10 @@ class GeminiConfig:
         return self.provider == OLLAMA_PROVIDER
 
     @property
+    def is_stub(self) -> bool:
+        return self.provider == STUB_PROVIDER
+
+    @property
     def requires_api_key(self) -> bool:
         return self.provider in {GOOGLE_PROVIDER, OPENROUTER_PROVIDER}
 
@@ -179,6 +190,7 @@ def load_config() -> ServerConfig:
         OPENROUTER_APP_TITLE — optional app title header for OpenRouter
         OLLAMA_BASE_URL — OpenAI-compatible Ollama endpoint (default: http://localhost:11434/v1)
         OLLAMA_MODEL — local Ollama model used for planning/SVG generation/evaluation
+        AFM_IMAGE_PROVIDER=stub — offline generator for CI and smoke tests
         AFM_MAX_ATTEMPTS — retry attempts for transient provider failures (default: 3)
         AFM_RETRY_BACKOFF_SECONDS — exponential backoff base seconds (default: 1.0)
         AFM_REQUEST_TIMEOUT_SECONDS — HTTP timeout in seconds (default: 180)

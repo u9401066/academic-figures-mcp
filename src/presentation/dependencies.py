@@ -17,12 +17,13 @@ from src.application.retarget_journal import RetargetJournalUseCase
 from src.application.verify_figure import VerifyFigureUseCase
 from src.domain.exceptions import ConfigurationError
 from src.infrastructure.composite import CompositeFigureAssembler
-from src.infrastructure.config import load_config
+from src.infrastructure.config import STUB_PROVIDER, load_config
 from src.infrastructure.file_metadata_fetcher import FileMetadataFetcher
 from src.infrastructure.gemini_adapter import GeminiAdapter, GeminiImageVerifier
 from src.infrastructure.manifest_store import FileManifestStore
 from src.infrastructure.prompt_engine import PromptEngine
 from src.infrastructure.pubmed_client import PubMedClient
+from src.infrastructure.stub_image_generator import StubImageGenerator, StubImageVerifier
 
 if TYPE_CHECKING:
     from src.domain.interfaces import (
@@ -63,13 +64,16 @@ class Container:
     @property
     def generator(self) -> ImageGenerator:
         if self._generator is None:
-            if self._config.gemini.requires_api_key and not self._config.gemini.api_key:
+            if self._config.gemini.provider == STUB_PROVIDER:
+                self._generator = StubImageGenerator()
+            elif self._config.gemini.requires_api_key and not self._config.gemini.api_key:
                 raise ConfigurationError(
                     f"{self._config.gemini.required_api_key_env} is not set. "
                     "Set it before starting the server with "
                     f"AFM_IMAGE_PROVIDER={self._config.gemini.provider}."
                 )
-            self._generator = GeminiAdapter(self._config.gemini)
+            else:
+                self._generator = GeminiAdapter(self._config.gemini)
         return self._generator
 
     @property
@@ -110,7 +114,10 @@ class Container:
     @property
     def verifier(self) -> ImageVerifier:
         if self._verifier is None:
-            self._verifier = GeminiImageVerifier(self._config.gemini)
+            if self._config.gemini.provider == STUB_PROVIDER:
+                self._verifier = StubImageVerifier()
+            else:
+                self._verifier = GeminiImageVerifier(self._config.gemini)
         return self._verifier
 
     # ── Use case factories ──────────────────────────────────
