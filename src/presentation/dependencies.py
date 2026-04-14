@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.application.batch_generate import BatchGenerateUseCase
+from src.application.composite_figure import CompositeFigureUseCase
 from src.application.edit_figure import EditFigureUseCase
 from src.application.evaluate_figure import EvaluateFigureUseCase
 from src.application.generate_figure import GenerateFigureUseCase
@@ -21,7 +22,13 @@ from src.infrastructure.prompt_engine import PromptEngine
 from src.infrastructure.pubmed_client import PubMedClient
 
 if TYPE_CHECKING:
-    from src.domain.interfaces import ImageGenerator
+    from src.domain.interfaces import (
+        FigureComposer,
+        ImageGenerator,
+        ManifestStore,
+        MetadataFetcher,
+        PromptBuilder,
+    )
 
 
 class Container:
@@ -43,6 +50,11 @@ class Container:
             cls._instance = cls()
         return cls._instance
 
+    @classmethod
+    def _reset_for_testing(cls) -> None:
+        """Discard the singleton so the next `get()` creates a fresh container."""
+        cls._instance = None
+
     @property
     def generator(self) -> ImageGenerator:
         if self._generator is None:
@@ -56,13 +68,13 @@ class Container:
         return self._generator
 
     @property
-    def fetcher(self) -> PubMedClient:
+    def fetcher(self) -> MetadataFetcher:
         if self._fetcher is None:
             self._fetcher = PubMedClient()
         return self._fetcher
 
     @property
-    def prompt_builder(self) -> PromptEngine:
+    def prompt_builder(self) -> PromptBuilder:
         if self._prompt_builder is None:
             self._prompt_builder = PromptEngine()
         return self._prompt_builder
@@ -72,13 +84,13 @@ class Container:
         return self._config.output_dir
 
     @property
-    def manifest_store(self) -> FileManifestStore:
+    def manifest_store(self) -> ManifestStore:
         if self._manifest_store is None:
             self._manifest_store = FileManifestStore(self._config.manifest_dir)
         return self._manifest_store
 
     @property
-    def composer(self) -> CompositeFigureAssembler:
+    def composer(self) -> FigureComposer:
         if self._composer is None:
             self._composer = CompositeFigureAssembler()
         return self._composer
@@ -111,6 +123,9 @@ class Container:
 
     def batch_generate_uc(self) -> BatchGenerateUseCase:
         return BatchGenerateUseCase(generate_uc=self.generate_figure_uc())
+
+    def composite_figure_uc(self) -> CompositeFigureUseCase:
+        return CompositeFigureUseCase(composer=self.composer)
 
     def replay_manifest_uc(self) -> ReplayManifestUseCase:
         return ReplayManifestUseCase(

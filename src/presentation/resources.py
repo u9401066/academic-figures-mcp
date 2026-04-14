@@ -75,6 +75,10 @@ def inventory_resource() -> str:
                 "edit_figure",
                 "evaluate_figure",
                 "batch_generate",
+                "composite_figure",
+                "replay_manifest",
+                "retarget_journal",
+                "list_manifests",
             ],
             "resources": [
                 "academic-figures://inventory",

@@ -11,6 +11,7 @@ from src.presentation.dependencies import Container
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
 
+    from src.application.composite_figure import CompositeFigureRequest
     from src.application.generate_figure import GenerateFigureRequest
 
 
@@ -91,6 +92,57 @@ def test_composite_figure_rejects_mismatched_labels() -> None:
 
     assert result["status"] == "error"
     assert "same length" in str(result["error"])
+
+
+def test_composite_figure_passes_request(monkeypatch: MonkeyPatch) -> None:
+    class StubUseCase:
+        def __init__(self) -> None:
+            self.request: object | None = None
+
+        def execute(self, req: object) -> dict[str, str]:
+            self.request = req
+            return {"status": "ok", "output_path": "out/composite.png"}
+
+    class StubContainer:
+        def __init__(self) -> None:
+            self.uc = StubUseCase()
+
+        def composite_figure_uc(self) -> StubUseCase:
+            return self.uc
+
+    container = StubContainer()
+    monkeypatch.setattr(Container, "get", lambda: container)
+
+    result = tools.composite_figure(
+        panels=[[" panel-a.png ", " chart "], ["panel-b.png", ""]],
+        labels=[" A ", "B"],
+        title=" Composite ",
+        caption=" Caption ",
+        citation=" PMID:123 ",
+        output_path=" out/composite.png ",
+    )
+
+    assert result["status"] == "ok"
+    request = cast("CompositeFigureRequest", container.uc.request)
+    assert request is not None
+    assert request.panels == [
+        {
+            "prompt": "composite panel",
+            "label": "A",
+            "panel_type": "chart",
+            "image_path": "panel-a.png",
+        },
+        {
+            "prompt": "composite panel",
+            "label": "B",
+            "panel_type": "anatomy",
+            "image_path": "panel-b.png",
+        },
+    ]
+    assert request.title == "Composite"
+    assert request.caption == "Caption"
+    assert request.citation == "PMID:123"
+    assert request.output_path == "out/composite.png"
 
 
 def test_replay_manifest_passes_request(monkeypatch: MonkeyPatch) -> None:

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import builtins
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.domain.entities import GenerationManifest
 from src.domain.exceptions import ManifestNotFoundError
 from src.domain.interfaces import ManifestStore
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class FileManifestStore(ManifestStore):
@@ -30,8 +33,8 @@ class FileManifestStore(ManifestStore):
         data = json.loads(path.read_text(encoding="utf-8"))
         return GenerationManifest.from_dict(data)
 
-    def list(self, limit: int = 20) -> builtins.list[GenerationManifest]:
-        manifests: builtins.list[GenerationManifest] = []
+    def list(self, limit: int = 20) -> list[GenerationManifest]:
+        manifests: list[GenerationManifest] = []
         for path in self._iter_paths(limit):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
@@ -40,7 +43,7 @@ class FileManifestStore(ManifestStore):
                 continue
         return manifests
 
-    def _iter_paths(self, limit: int) -> builtins.list[Path]:
+    def _iter_paths(self, limit: int) -> Sequence[Path]:
         if not self._root.exists():
             return []
         files = sorted(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from src.application.composite_figure import CompositeFigureRequest
 from src.application.edit_figure import EditFigureRequest
 from src.application.evaluate_figure import EvaluateFigureRequest
 from src.application.generate_figure import GenerateFigureRequest
@@ -203,9 +204,7 @@ def composite_figure(
         if len(panels) != len(labels):
             raise ValidationError("panels and labels must be the same length")
 
-        from src.infrastructure.composite import CompositeFigure, PanelSpec
-
-        composer = CompositeFigure()
+        normalized_panels: list[dict[str, str]] = []
         for index, panel in enumerate(panels):
             if len(panel) != 2:
                 raise ValidationError(f"panels[{index}] must contain [image_path, panel_type]")
@@ -216,22 +215,27 @@ def composite_figure(
             if not label:
                 raise ValidationError(f"labels[{index}] cannot be blank")
 
-            composer.add_panel(
-                PanelSpec(
-                    prompt="composite panel",
-                    label=label,
-                    panel_type=panel_type,
-                ),
-                image_path,
+            normalized_panels.append(
+                {
+                    "prompt": "composite panel",
+                    "label": label,
+                    "panel_type": panel_type,
+                    "image_path": image_path,
+                }
             )
 
-        composer.set_title(title.strip())
-        composer.set_caption(caption.strip())
-        composer.set_citation(citation.strip())
         normalized_output_path = (
             normalize_image_path(output_path, field_name="output_path") if output_path else None
         )
-        return composer.compose(normalized_output_path)
+        request = CompositeFigureRequest(
+            panels=normalized_panels,
+            title=title.strip(),
+            caption=caption.strip(),
+            citation=citation.strip(),
+            output_path=normalized_output_path,
+        )
+        uc = Container.get().composite_figure_uc()
+        return uc.execute(request)
     except (ConfigurationError, ValidationError, DomainError) as exc:
         return _error_payload(exc)
 
