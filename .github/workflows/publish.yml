@@ -4,12 +4,29 @@ on:
   push:
     tags:
       - "v*"          # triggers on v0.3.0, v1.0.0, etc.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish (for example: v0.3.0)
+        required: true
+        type: string
+      publish_pypi:
+        description: Publish the Python package to PyPI
+        required: true
+        default: false
+        type: boolean
+      publish_vscode:
+        description: Publish the VS Code extension / Open VSX package
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
 
 env:
   UV_CACHE_DIR: .uv-cache
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
   # ==========================================
@@ -20,6 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -36,9 +55,12 @@ jobs:
   build-python:
     name: 📦 Build Python Package
     needs: [quality-gate]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_pypi }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - uses: astral-sh/setup-uv@v6
         with:
@@ -54,7 +76,7 @@ jobs:
           data = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
           print(data['project']['version'])
           ")
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_VERSION="${RELEASE_TAG#v}"
           if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
             echo "❌ Tag version ($TAG_VERSION) != pyproject.toml version ($PKG_VERSION)"
             exit 1
@@ -72,6 +94,7 @@ jobs:
   publish-pypi:
     name: 🚀 Publish to PyPI
     needs: [build-python]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_pypi }}
     runs-on: ubuntu-latest
     environment: pypi          # GitHub Environment with OIDC trust
     permissions:
@@ -92,12 +115,15 @@ jobs:
   publish-vscode:
     name: 🧩 Publish VS Code Extension
     needs: [quality-gate]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_vscode }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: vscode-extension
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - uses: actions/setup-node@v4
         with:
@@ -109,7 +135,7 @@ jobs:
       - name: Verify tag matches extension version
         run: |
           EXT_VERSION=$(node -p "require('./package.json').version")
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_VERSION="${RELEASE_TAG#v}"
           if [ "$EXT_VERSION" != "$TAG_VERSION" ]; then
             echo "❌ Tag version ($TAG_VERSION) != package.json version ($EXT_VERSION)"
             exit 1
