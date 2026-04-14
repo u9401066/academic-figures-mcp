@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
+import pytest
+
+from src.domain.exceptions import ConfigurationError
+from src.infrastructure.config import ServerConfig
+from src.infrastructure.file_metadata_fetcher import FileMetadataFetcher
 from src.presentation.dependencies import Container
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestContainerReset:
@@ -25,3 +34,24 @@ class TestContainerReset:
         a = Container.get()
         b = Container.get()
         assert a is b
+
+    @patch("src.presentation.dependencies.load_config")
+    def test_fetcher_uses_file_metadata_source(self, mock_cfg: object, tmp_path: Path) -> None:
+        data_file = tmp_path / "papers.yaml"
+        data_file.write_text(
+            "papers:\n  - pmid: '12345678'\n    title: File-backed paper\n",
+            encoding="utf-8",
+        )
+        mock_cfg.return_value = ServerConfig(metadata_source="file", metadata_file=str(data_file))
+
+        fetcher = Container.get().fetcher
+
+        assert isinstance(fetcher, FileMetadataFetcher)
+        assert fetcher.fetch_paper("12345678").title == "File-backed paper"
+
+    @patch("src.presentation.dependencies.load_config")
+    def test_fetcher_requires_metadata_file_for_file_source(self, mock_cfg: object) -> None:
+        mock_cfg.return_value = ServerConfig(metadata_source="file", metadata_file=None)
+
+        with pytest.raises(ConfigurationError, match="AFM_METADATA_FILE"):
+            _ = Container.get().fetcher

@@ -194,7 +194,8 @@ def main() -> int:
         return 1
 
     try:
-        result = generate_figure(pmid="41657234", language="zh-TW", output_size="1024x1024")
+        smoke_pmid = os.environ.get("AFM_SMOKE_PMID", "41657234").strip() or "41657234"
+        result = generate_figure(pmid=smoke_pmid, language="zh-TW", output_size="1024x1024")
         compact = sanitized_summary(result)
         stage = "ok"
         if compact.get("status") in {"error", "generation_failed"}:

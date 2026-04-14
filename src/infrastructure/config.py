@@ -8,9 +8,12 @@ from dataclasses import dataclass, field
 GOOGLE_PROVIDER = "google"
 OPENROUTER_PROVIDER = "openrouter"
 OLLAMA_PROVIDER = "ollama"
+METADATA_SOURCE_PUBMED = "pubmed"
+METADATA_SOURCE_FILE = "file"
 
 _SUPPORTED_PROVIDERS = {GOOGLE_PROVIDER, OPENROUTER_PROVIDER, OLLAMA_PROVIDER}
 _SUPPORTED_TRANSPORTS = {"stdio", "sse", "streamable-http"}
+_SUPPORTED_METADATA_SOURCES = {METADATA_SOURCE_PUBMED, METADATA_SOURCE_FILE}
 
 
 def _normalize_provider(value: str) -> str:
@@ -18,6 +21,13 @@ def _normalize_provider(value: str) -> str:
     if provider in _SUPPORTED_PROVIDERS:
         return provider
     return GOOGLE_PROVIDER
+
+
+def _normalize_metadata_source(value: str) -> str:
+    source = value.strip().lower()
+    if source in _SUPPORTED_METADATA_SOURCES:
+        return source
+    return METADATA_SOURCE_PUBMED
 
 
 def _default_model_for(provider: str) -> str:
@@ -141,6 +151,8 @@ class ServerConfig:
     transport: str = "stdio"
     output_dir: str = ".academic-figures/outputs"
     manifest_dir: str = ".academic-figures/manifests"
+    metadata_source: str = METADATA_SOURCE_PUBMED
+    metadata_file: str | None = None
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
 
 
@@ -160,6 +172,8 @@ def load_config() -> ServerConfig:
         GEMINI_IMAGE_SIZE — "0.5K" | "1K" | "2K" | "4K"
         AFM_OUTPUT_DIR — output directory (default: .academic-figures/outputs)
         AFM_MANIFEST_DIR — manifest directory (default: .academic-figures/manifests)
+        AFM_METADATA_SOURCE — "pubmed" | "file" (default: pubmed)
+        AFM_METADATA_FILE — JSON/YAML file used when AFM_METADATA_SOURCE=file
         OPENROUTER_BASE_URL — OpenRouter API base URL (default: https://openrouter.ai/api/v1)
         OPENROUTER_HTTP_REFERER — optional attribution header for OpenRouter
         OPENROUTER_APP_TITLE — optional app title header for OpenRouter
@@ -232,9 +246,15 @@ def load_config() -> ServerConfig:
     if transport not in _SUPPORTED_TRANSPORTS:
         transport = "stdio"
 
+    metadata_file = os.environ.get("AFM_METADATA_FILE", "").strip() or None
+
     return ServerConfig(
         transport=transport,
         output_dir=os.environ.get("AFM_OUTPUT_DIR", ".academic-figures/outputs"),
         manifest_dir=os.environ.get("AFM_MANIFEST_DIR", ".academic-figures/manifests"),
+        metadata_source=_normalize_metadata_source(
+            os.environ.get("AFM_METADATA_SOURCE", METADATA_SOURCE_PUBMED)
+        ),
+        metadata_file=metadata_file,
         gemini=gemini,
     )

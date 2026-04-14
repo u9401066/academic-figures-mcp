@@ -16,6 +16,7 @@ from src.application.retarget_journal import RetargetJournalUseCase
 from src.domain.exceptions import ConfigurationError
 from src.infrastructure.composite import CompositeFigureAssembler
 from src.infrastructure.config import load_config
+from src.infrastructure.file_metadata_fetcher import FileMetadataFetcher
 from src.infrastructure.gemini_adapter import GeminiAdapter
 from src.infrastructure.manifest_store import FileManifestStore
 from src.infrastructure.prompt_engine import PromptEngine
@@ -39,7 +40,7 @@ class Container:
     def __init__(self) -> None:
         self._config = load_config()
         self._generator: ImageGenerator | None = None
-        self._fetcher: PubMedClient | None = None
+        self._fetcher: MetadataFetcher | None = None
         self._prompt_builder: PromptEngine | None = None
         self._manifest_store: FileManifestStore | None = None
         self._composer: CompositeFigureAssembler | None = None
@@ -70,7 +71,14 @@ class Container:
     @property
     def fetcher(self) -> MetadataFetcher:
         if self._fetcher is None:
-            self._fetcher = PubMedClient()
+            if self._config.metadata_source == "file":
+                if not self._config.metadata_file:
+                    raise ConfigurationError(
+                        "AFM_METADATA_FILE is required when AFM_METADATA_SOURCE=file."
+                    )
+                self._fetcher = FileMetadataFetcher(self._config.metadata_file)
+            else:
+                self._fetcher = PubMedClient()
         return self._fetcher
 
     @property

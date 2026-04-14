@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.infrastructure.config import OLLAMA_PROVIDER, OPENROUTER_PROVIDER, load_config
+from src.infrastructure.config import (
+    METADATA_SOURCE_FILE,
+    OLLAMA_PROVIDER,
+    OPENROUTER_PROVIDER,
+    load_config,
+)
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
@@ -30,3 +35,13 @@ def test_load_config_exposes_cross_provider_fallback(monkeypatch: MonkeyPatch) -
     config = load_config()
 
     assert config.gemini.fallback_provider == OPENROUTER_PROVIDER
+
+
+def test_load_config_accepts_file_metadata_source(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("AFM_METADATA_SOURCE", "file")
+    monkeypatch.setenv("AFM_METADATA_FILE", "/tmp/papers.yaml")
+
+    config = load_config()
+
+    assert config.metadata_source == METADATA_SOURCE_FILE
+    assert config.metadata_file == "/tmp/papers.yaml"
