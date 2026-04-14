@@ -423,13 +423,64 @@ export_scene(
     scene_id: str,
     format: str = "svg",
     output_path: str | None = None,
+    group_mode: str = "preserve",   # "preserve" | "flatten"
 ) → ExportResult
 ```
 
-Exports the scene to an editable format:
-- `svg`: Each layer becomes an SVG group element.
-- `psd`: Photoshop-compatible layered file (via `psd-tools`).
-- `figma-json`: Figma-importable JSON (future).
+Exports the scene to an editable format. `group_mode` controls whether groups are preserved in the output:
+
+- **`preserve`** (default): groups map to container structures in the target format.
+- **`flatten`**: dissolve all groups; each layer is a top-level element.
+
+**Supported formats:**
+
+| Format | Extension | Groups | Text editability | Notes |
+|--------|-----------|--------|------------------|-------|
+| `svg` | `.svg` | `<g>` nesting | `<text>` elements for text layers | Primary. Opens in Inkscape/Illustrator/browsers. |
+| `pptx` | `.pptx` | Slide groups (`<p:grpSp>`) | Editable text shapes | PPTX slide with grouped shapes. Each layer → shape; each group → grouped shapes. Uses `python-pptx`. |
+| `psd` | `.psd` | Layer groups | Rasterized text | Best-effort via `psd-tools`. Opens in Photoshop. |
+| `figma-json` | `.json` | Figma frame hierarchy | N/A (import as frames) | Future. Figma-importable JSON. |
+
+#### 5.5.1 PPTX Export Details
+
+PPTX export maps the scene graph to a PowerPoint slide:
+
+```
+FigureScene
+  └── Slide (canvas_width × canvas_height scaled to slide dimensions)
+       ├── background layer → slide background image
+       ├── LayerGroup "grp-step1" → <p:grpSp> (GroupShape)
+       │    ├── step1-box → Rectangle shape with fill
+       │    └── step1-text → TextBox shape with editable text
+       ├── connector-1 → Connector shape (arrow/line)
+       ├── title layer → TextBox shape
+       └── ...
+```
+
+**Why PPTX?** Academic users frequently embed figures into PowerPoint presentations. Exporting as an editable PPTX slide — with grouped shapes that can be ungrouped, edited, and restyled — is a natural handoff format. This is the "類似像 PPTX 那樣" capability the product needs.
+
+**Text layer handling**: When a layer has `category` in (`title`, `subtitle`, `text_block`, `label`, `citation`), the exporter attempts **OCR-or-prompt-based text extraction** to create a genuine editable `TextBox` shape rather than an embedded image. Fallback: embed the layer's raster image as a picture shape.
+
+**Connector handling**: Connector layers with `metadata.path_points` are exported as PPTX connector shapes with begin/end anchors linked to their source/target node shapes. This preserves the "drag node → connector follows" behavior in PowerPoint.
+
+#### 5.5.2 SVG Export Details
+
+SVG export maps groups to `<g>` elements with `id` and `data-category` attributes:
+
+```xml
+<svg viewBox="0 0 2400 1600" xmlns="http://www.w3.org/2000/svg">
+  <g id="grp-main-flow" data-category="composite_block">
+    <g id="grp-step1" data-category="flowchart_step">
+      <rect id="step1-box" x="800" y="200" width="400" height="120" fill="#E3F2FD"/>
+      <text id="step1-text" x="820" y="260" font-size="14">Patient Assessment</text>
+    </g>
+    <line id="connector-1-2" x1="1000" y1="320" x2="1000" y2="400"
+          stroke="#333" marker-end="url(#arrowhead)"/>
+  </g>
+</svg>
+```
+
+Text layers become `<text>` elements (editable in Inkscape). Image-based layers become `<image>` elements with embedded base64 or external file references.
 
 ## 6. User Workflows
 
@@ -594,28 +645,35 @@ After recomposition, the system can optionally compare the re-rendered image aga
 
 ### Phase 1 — Vision-Model Decomposition (v0.6.0)
 
-**Goal**: Ship the core decompose → edit → recompose loop using Gemini vision.
+**Goal**: Ship the core decompose → edit → recompose loop using Gemini vision, with grouping and PPTX export.
 
 Deliverables:
-- `FigureScene`, `Layer`, `LayerCategory`, `BoundingBox`, `LayerStyle` domain types
-- `ImageSegmenter` interface + `GeminiSegmenter` implementation
+- `FigureScene`, `Layer`, `LayerGroup` domain entities
+- `LayerCategory`, `GroupCategory`, `BoundingBox`, `LayerStyle` value objects
+- `ImageSegmenter` interface + `GeminiSegmenter` implementation (with figure-type-aware strategies)
 - `SceneStore` interface + `FileSceneStore` implementation
 - `SceneRenderer` interface + `PillowSceneRenderer` implementation
 - `DecomposeFigureUseCase`, `EditLayerUseCase`, `RecomposeSceneUseCase`
 - MCP tools: `decompose_figure`, `edit_layer`, `recompose_scene`, `list_scenes`
+- `export_scene` MCP tool — SVG and PPTX export (groups preserved)
+- Flowchart two-pass hierarchical segmentation strategy (§4.4.1)
+- `decomposition_depth` parameter (`shallow` / `standard` / `deep`)
+- `group` / `ungroup` edit actions
 - Unit tests for domain types and use cases
 - Integration test for end-to-end decompose → edit → recompose flow
 
 ### Phase 2 — Precision Segmentation (v0.8.0)
 
-**Goal**: Add pixel-perfect masks and non-rectangular layer support.
+**Goal**: Add pixel-perfect masks, non-rectangular layer support, and PSD export.
 
 Deliverables:
 - `SAMSegmenter` infrastructure adapter (SAM2 + GroundingDINO)
 - Alpha mask support in Layer and SceneRenderer
-- `export_scene` MCP tool (SVG, PSD formats)
+- PSD export format in `export_scene`
 - Decomposition quality gate automation
 - Configurable segmenter selection (Gemini vs. SAM) via provider config
+- CJK text-layer special handling
+- Scene version history (undo support)
 
 ### Phase 3 — Native Layered Generation (v1.0.0)
 
@@ -624,7 +682,7 @@ Deliverables:
 Deliverables:
 - Modified generation pipeline that produces per-element images
 - Automatic scene assembly during generation
-- Layer-aware planning (planner recommends layer structure)
+- Layer-aware planning (planner recommends layer structure with group hierarchy)
 - Recompose fidelity check
 - Figma-JSON export format
 
@@ -637,8 +695,11 @@ Deliverables:
 | `segment-anything-2` | Pixel-perfect segmentation | Apache 2.0 |
 | `groundingdino` | Open-set object detection | Apache 2.0 |
 | `psd-tools` | PSD export | MIT |
+| `python-pptx` | PPTX export with grouped shapes and editable text | MIT |
 
 Phase 1 requires **no new dependencies** — it uses existing Gemini + Pillow.
+
+> Note: `python-pptx` may be introduced in Phase 1 if PPTX export is prioritized. It is a pure-Python library with no native dependencies.
 
 ### 10.2 Risk Matrix
 
@@ -649,6 +710,9 @@ Phase 1 requires **no new dependencies** — it uses existing Gemini + Pillow.
 | Layer edits introduce visual artifacts | Medium | Medium | Recompose fidelity check + user preview before save |
 | Generation cost increase (Phase 3) | Medium | High | Make native-layer generation opt-in; keep flat path as default |
 | CJK text layers lose fidelity on crop | Medium | Medium | Use text-detection-specific segmentation for CJK labels |
+| Flowchart over-segmentation (deep mode) | Medium | Medium | Default to `standard` depth; warn when layer count > 80 |
+| PPTX connector anchoring inaccuracy | Low | Medium | Fall back to free-floating line shapes when anchor detection fails |
+| Group nesting exceeds export format limits | Low | Low | Cap at 4 levels; flatten deeper nests on export |
 
 ## 11. Success Metrics
 
@@ -658,7 +722,7 @@ Phase 1 requires **no new dependencies** — it uses existing Gemini + Pillow.
 | Mean label match rate | ≥ 90% | expected_labels found in layers |
 | Edit → recompose round-trip time | < 3s | Time from edit_layer to recompose_scene (no regen) |
 | User layer edit satisfaction | ≥ 4/5 | Surveyed rating on precision of edits |
-| Export compatibility | SVG, PSD | Opens correctly in Inkscape, Photoshop |
+| Export compatibility | SVG, PPTX, PSD | Opens correctly in Inkscape, PowerPoint, Photoshop |
 
 ## 12. Relationship to Existing Features
 
@@ -681,6 +745,14 @@ Phase 1 requires **no new dependencies** — it uses existing Gemini + Pillow.
 3. **Should layer edits be version-controlled?** Each edit creates a new scene version, enabling undo. Current recommendation: yes, store as `scene-v1.json`, `scene-v2.json`, etc.
 
 4. **PSD export feasibility on all platforms?** `psd-tools` is pure Python but the format is complex. Current recommendation: SVG as primary export, PSD as best-effort.
+
+5. **Can Gemini Vision reliably produce group hierarchies for flowcharts?** Early experiments needed. If Gemini returns only flat bounding boxes, the grouping heuristic must infer groups from spatial proximity (box-contains-text → group, arrow-endpoint-near-box → link). Phase 1 fallback: spatial-proximity grouping algorithm in `GeminiSegmenter`.
+
+6. **PPTX connector shape accuracy?** `python-pptx` supports connector shapes but anchor positioning is fragile. Alternative: render connectors as line shapes (not true connectors) with arrowhead markers. Revisit once prototype validates.
+
+7. **Should `decomposition_depth` be per-figure-type?** A flowchart may need `standard` while a simple bar chart only needs `shallow`. Current recommendation: allow per-call override, but each figure-type strategy has a sensible default.
+
+8. **Text extraction for PPTX text shapes**: should we use OCR (Tesseract / Gemini vision) or store the original prompt text? Current recommendation: prefer prompt-derived text when available (from `planned_payload`), fall back to Gemini-based text recognition.
 
 ---
 
