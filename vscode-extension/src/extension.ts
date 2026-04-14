@@ -38,14 +38,21 @@ type PresetGroup = {
   items: readonly string[];
 };
 
+type ResourceItem = {
+  label: string;
+  workspaceRelativePath: string;
+  bundledRelativePath: string;
+};
+
 type ResourceGroup = {
   id: string;
   label: string;
-  items: readonly { label: string; relativePath: string }[];
+  items: readonly ResourceItem[];
 };
 
 type CommandDeps = {
   artifactRoot: string;
+  extensionUri: vscode.Uri;
   jobsProvider: JobsProvider;
   mcpProvider: AcademicFiguresMcpProvider;
   presetsProvider: PresetsProvider;
@@ -105,29 +112,61 @@ const RESOURCE_GROUPS: readonly ResourceGroup[] = [
   {
     id: "templates",
     label: "Prompt Templates",
-    items: [{ label: "Prompt Templates", relativePath: "templates/prompt-templates.md" }],
+    items: [
+      {
+        label: "Prompt Templates",
+        workspaceRelativePath: "templates/prompt-templates.md",
+        bundledRelativePath: "resources/knowledge/prompt-templates.md",
+      },
+    ],
   },
   {
     id: "standards",
     label: "Standards",
     items: [
-      { label: "Anatomy Color Standards", relativePath: "templates/anatomy-color-standards.md" },
-      { label: "Journal Figure Standards", relativePath: "templates/journal-figure-standards.md" },
+      {
+        label: "Anatomy Color Standards",
+        workspaceRelativePath: "templates/anatomy-color-standards.md",
+        bundledRelativePath: "resources/knowledge/anatomy-color-standards.md",
+      },
+      {
+        label: "Journal Figure Standards",
+        workspaceRelativePath: "templates/journal-figure-standards.md",
+        bundledRelativePath: "resources/knowledge/journal-figure-standards.md",
+      },
     ],
   },
   {
     id: "guides",
     label: "Rendering Guides",
     items: [
-      { label: "Gemini Tips", relativePath: "templates/gemini-tips.md" },
-      { label: "Code Rendering", relativePath: "templates/code-rendering.md" },
-      { label: "Scientific Figures Guide", relativePath: "templates/scientific-figures-guide.md" },
+      {
+        label: "Gemini Tips",
+        workspaceRelativePath: "templates/gemini-tips.md",
+        bundledRelativePath: "resources/knowledge/gemini-tips.md",
+      },
+      {
+        label: "Code Rendering",
+        workspaceRelativePath: "templates/code-rendering.md",
+        bundledRelativePath: "resources/knowledge/code-rendering.md",
+      },
+      {
+        label: "Scientific Figures Guide",
+        workspaceRelativePath: "templates/scientific-figures-guide.md",
+        bundledRelativePath: "resources/knowledge/scientific-figures-guide.md",
+      },
     ],
   },
   {
     id: "evaluation",
     label: "Evaluation Rubrics",
-    items: [{ label: "AI Medical Illustration Evaluation", relativePath: "templates/ai-medical-illustration-evaluation.md" }],
+    items: [
+      {
+        label: "AI Medical Illustration Evaluation",
+        workspaceRelativePath: "templates/ai-medical-illustration-evaluation.md",
+        bundledRelativePath: "resources/knowledge/ai-medical-illustration-evaluation.md",
+      },
+    ],
   },
 ];
 
@@ -186,7 +225,10 @@ class ResourcesProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
 
   public readonly onDidChangeTreeData = this.emitter.event;
 
-  public constructor(private readonly workspaceRoot: string | undefined) {}
+  public constructor(
+    private readonly workspaceRoot: string | undefined,
+    private readonly extensionUri: vscode.Uri,
+  ) {}
 
   public refresh(): void {
     this.emitter.fire();
@@ -202,20 +244,19 @@ class ResourcesProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     }
 
     const group = RESOURCE_GROUPS.find((entry) => entry.label === element.label);
-    if (!group || !this.workspaceRoot) {
+    if (!group) {
       return [];
     }
-    const workspaceRoot = this.workspaceRoot;
     return group.items.map((item) => {
-      const filePath = path.join(workspaceRoot, item.relativePath);
+      const resourceUri = resolveResourceUri(this.workspaceRoot, this.extensionUri, item);
       return new LeafItem(
         item.label,
         {
           command: "academicFiguresMcp.openWorkspaceFile",
           title: "Open resource",
-          arguments: [filePath],
+          arguments: [resourceUri],
         },
-        vscode.Uri.file(filePath),
+        resourceUri,
       );
     });
   }
@@ -275,7 +316,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const workspaceRoot = getWorkspaceRoot();
   const artifactRoot = ensureArtifactDirectories(workspaceRoot);
   const presetsProvider = new PresetsProvider();
-  const resourcesProvider = new ResourcesProvider(workspaceRoot);
+  const resourcesProvider = new ResourcesProvider(workspaceRoot, context.extensionUri);
   const jobsProvider = new JobsProvider(artifactRoot);
   const mcpProvider = new AcademicFiguresMcpProvider(context, outputChannel);
   context.subscriptions.push({ dispose: () => mcpProvider.dispose() });
@@ -307,6 +348,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   registerCommands(context, {
     artifactRoot,
+    extensionUri: context.extensionUri,
     jobsProvider,
     mcpProvider,
     presetsProvider,
@@ -334,9 +376,13 @@ function registerCommands(
   });
 
   register("academicFiguresMcp.openWorkspaceFile", async (filePath: unknown) => {
-    const target = String(filePath ?? "");
-    if (!target || !fs.existsSync(target)) {
-      vscode.window.showWarningMessage("Requested resource file was not found in the workspace.");
+    const target = toResourceUri(filePath);
+    if (!target) {
+      vscode.window.showWarningMessage("Requested resource file could not be resolved.");
+      return;
+    }
+    if (target.scheme === "file" && !fs.existsSync(target.fsPath)) {
+      vscode.window.showWarningMessage("Requested resource file was not found.");
       return;
     }
     const document = await vscode.workspace.openTextDocument(target);
@@ -436,15 +482,23 @@ function registerCommands(
     const choices = RESOURCE_GROUPS.flatMap((group) =>
       group.items.map((item) => ({
         label: item.label,
-        description: item.relativePath,
+        description: item.workspaceRelativePath,
       })),
     );
     const selected = await vscode.window.showQuickPick(choices, { placeHolder: "Open a knowledge asset" });
-    if (!selected || !deps.workspaceRoot) {
+    if (!selected) {
       return;
     }
-    const filePath = path.join(deps.workspaceRoot, selected.description ?? "");
-    await vscode.commands.executeCommand("academicFiguresMcp.openWorkspaceFile", filePath);
+
+    const item = RESOURCE_GROUPS.flatMap((group) => group.items).find(
+      (resource) => resource.label === selected.label,
+    );
+    if (!item) {
+      return;
+    }
+
+    const resourceUri = resolveResourceUri(deps.workspaceRoot, deps.extensionUri, item);
+    await vscode.commands.executeCommand("academicFiguresMcp.openWorkspaceFile", resourceUri);
   });
 
   register("academicFiguresMcp.openRecentJobs", async () => {
@@ -765,6 +819,34 @@ async function openArtifact(filePath: string): Promise<void> {
 async function openTextArtifact(filePath: string): Promise<void> {
   const document = await vscode.workspace.openTextDocument(filePath);
   await vscode.window.showTextDocument(document, { preview: false });
+}
+
+function resolveResourceUri(
+  workspaceRoot: string | undefined,
+  extensionUri: vscode.Uri,
+  item: ResourceItem,
+): vscode.Uri {
+  if (workspaceRoot) {
+    const workspacePath = path.join(workspaceRoot, item.workspaceRelativePath);
+    if (fs.existsSync(workspacePath)) {
+      return vscode.Uri.file(workspacePath);
+    }
+  }
+
+  return vscode.Uri.joinPath(extensionUri, item.bundledRelativePath);
+}
+
+function toResourceUri(value: unknown): vscode.Uri | undefined {
+  if (value instanceof vscode.Uri) {
+    return value;
+  }
+  if (typeof value === "string" && value) {
+    return vscode.Uri.file(value);
+  }
+  if (value && typeof value === "object" && "scheme" in value && "path" in value) {
+    return vscode.Uri.from(value as Parameters<typeof vscode.Uri.from>[0]);
+  }
+  return undefined;
 }
 
 function slugify(value: string): string {

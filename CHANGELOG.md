@@ -6,6 +6,25 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ## [Unreleased]
 
+## [0.4.1]
+
+### Added in 0.4.1
+
+- Added `scripts/package_smoke.py` plus a GitHub Actions package-smoke matrix that validates the `uvx --from . afm-run` install path on Ubuntu, macOS, and Windows.
+- Added bundled knowledge markdown assets inside the VS Code extension so packaged installs can open built-in guides without requiring the repository checkout.
+- Added VS Code one-click MCP install links and `uvx` package-mode examples to the main README, following the Zotero Keeper onboarding pattern.
+
+### Changed in 0.4.1
+
+- Academic Figures sidebar title actions now expose Setup Wizard, Configure Connection, Browse Knowledge Assets, and a welcome hint for first-use credential setup.
+- Knowledge-asset browsing now resolves workspace files first and falls back to bundled extension resources for packaged VSIX installs.
+- Cross-platform docs now recommend `uvx --from academic-figures-mcp afm-server` as the primary install path for macOS, Linux, and Windows users.
+
+### Fixed in 0.4.1
+
+- Fixed the published VS Code extension manifest by declaring `mcpServerDefinitionProviders`, which unblocks activation in the extension host.
+- Fixed packaged VSIX installs so bundled markdown knowledge assets open correctly instead of incorrectly resolving only against the active workspace.
+
 ## [0.4.0]
 
 ### Added in 0.4.0

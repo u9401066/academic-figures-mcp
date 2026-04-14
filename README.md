@@ -10,6 +10,15 @@
 
 Academic Figures MCP is a workflow harness for multi-step academic reasoning and figure production. PMID ingestion is one structured entry point, but the real product value is helping an agent move through academic planning, concept decomposition, figure-type selection, prompt orchestration, image generation, evaluation, and iteration until it reaches a publication-grade result. MCP exposure and VSX packaging make that workflow usable without requiring engineering-heavy setup.
 
+## One-Click Install (VS Code)
+
+> Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). The install shape uses `uvx --from academic-figures-mcp afm-server`, which is shell-neutral across macOS, Linux, and Windows.
+
+[![Install in VS Code](https://img.shields.io/badge/VS%20Code-Install%20MCP%20Server-007ACC?style=for-the-badge&logo=visualstudiocode)](vscode:mcp/install?%7B%22name%22%3A%22academic-figures%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22--from%22%2C%22academic-figures-mcp%22%2C%22afm-server%22%5D%7D)
+[![Install in VS Code Insiders](https://img.shields.io/badge/VS%20Code%20Insiders-Install%20MCP%20Server-24bfa5?style=for-the-badge&logo=visualstudiocode)](vscode-insiders:mcp/install?%7B%22name%22%3A%22academic-figures%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22--from%22%2C%22academic-figures-mcp%22%2C%22afm-server%22%5D%7D)
+
+If you want guided setup instead of raw MCP configuration, install the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=u9401066.academic-figures-mcp). It supports SecretStorage, env files, and process environment configuration on macOS, Linux, and Windows.
+
 ## Introduction Visual
 
 ![Academic Figures MCP introduction hero](.academic-figures/outputs/repo-intro-hero.png)
@@ -193,7 +202,29 @@ The script only prints variable presence and a compact result summary. It never 
 
 ### VS Code Copilot
 
-Add to your Copilot MCP settings (`.vscode/mcp.json`):
+Recommended package-mode install for macOS, Linux, and Windows users who do not want a local checkout:
+
+```json
+{
+  "servers": {
+    "academicFigures": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "academic-figures-mcp",
+        "afm-server"
+      ],
+      "env": {
+        "AFM_IMAGE_PROVIDER": "google",
+        "GOOGLE_API_KEY": "${input:googleApiKey}"
+      }
+    }
+  }
+}
+```
+
+For local repository development, add to your Copilot MCP settings (`.vscode/mcp.json`):
 
 ```json
 {
@@ -280,7 +311,37 @@ The VS Code extension can now run plan, generate, transform, and evaluate comman
 
 Any MCP-compatible agent can use these tools directly.
 
+Recommended package-mode shape for Claude Desktop or any MCP host that accepts `command` plus `args`:
+
+```json
+{
+  "mcpServers": {
+    "academic-figures": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "academic-figures-mcp",
+        "afm-server"
+      ],
+      "env": {
+        "AFM_IMAGE_PROVIDER": "google",
+        "GOOGLE_API_KEY": "your_google_api_key"
+      }
+    }
+  }
+}
+```
+
+If your MCP host prefers a checked-out repository instead of `uvx`, keep the repo path absolute and use the existing `uv run --project /absolute/path/to/academic-figures-mcp python -m src.presentation.server` form.
+
 For local development with the newer MCP SDK transport options, the server defaults to `stdio`, and can also be started with `MCP_TRANSPORT=streamable-http` for HTTP-based inspection workflows.
+
+## Cross-Platform Notes
+
+- Package mode is the most portable install path: `uvx --from academic-figures-mcp afm-server` works without shell-specific quoting on macOS, Linux, and Windows.
+- Local checkout mode is also cross-platform: use `scripts/start_afm_local.py` on macOS/Linux and `scripts/start_afm_local.ps1` on Windows PowerShell.
+- Environment parsing already accepts `KEY=value`, `export KEY=value`, and `set KEY=value`, so the same env profile can be reused across Bash, Zsh, Fish-style exports, and PowerShell/CMD-oriented files.
+- The VS Code extension falls back to package mode through `uvx` when no local source tree is detected, which is the safest route for non-developer users on all three platforms.
 
 ## Architecture
 

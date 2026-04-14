@@ -2,7 +2,7 @@
   "name": "academic-figures-mcp",
   "displayName": "Academic Figures MCP",
   "description": "A workflow-first academic figure agent harness for multi-step planning, generation, and evaluation through MCP and VSX, with guided onboarding for non-engineers.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "u9401066",
   "license": "Apache-2.0",
   "icon": "resources/icon.png",
@@ -37,6 +37,12 @@
     "onStartupFinished"
   ],
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "academic-figures-mcp.servers",
+        "label": "Academic Figures MCP"
+      }
+    ],
     "commands": [
       {
         "command": "academicFiguresMcp.planFigureFromPmid",
@@ -66,12 +72,14 @@
       {
         "command": "academicFiguresMcp.browseKnowledgeAssets",
         "title": "Academic Figures: Browse Knowledge Assets",
-        "category": "Academic Figures"
+        "category": "Academic Figures",
+        "icon": "$(book)"
       },
       {
         "command": "academicFiguresMcp.configureApiKey",
         "title": "Academic Figures: Configure Connection",
-        "category": "Academic Figures"
+        "category": "Academic Figures",
+        "icon": "$(key)"
       },
       {
         "command": "academicFiguresMcp.createEnvironmentFile",
@@ -91,7 +99,8 @@
       {
         "command": "academicFiguresMcp.refreshViews",
         "title": "Academic Figures: Refresh Views",
-        "category": "Academic Figures"
+        "category": "Academic Figures",
+        "icon": "$(refresh)"
       },
       {
         "command": "academicFiguresMcp.showStatus",
@@ -245,12 +254,33 @@
     "menus": {
       "view/title": [
         {
+          "command": "academicFiguresMcp.setupWizard",
+          "when": "view =~ /^academicFigures\\./",
+          "group": "navigation@1"
+        },
+        {
+          "command": "academicFiguresMcp.configureApiKey",
+          "when": "view =~ /^academicFigures\\./",
+          "group": "navigation@2"
+        },
+        {
+          "command": "academicFiguresMcp.browseKnowledgeAssets",
+          "when": "view =~ /^academicFigures\\./",
+          "group": "navigation@3"
+        },
+        {
           "command": "academicFiguresMcp.refreshViews",
           "when": "view =~ /^academicFigures\\./",
-          "group": "navigation"
+          "group": "navigation@9"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "academicFigures.jobs",
+        "contents": "Set up a provider before running your first figure.\n[Configure Connection](command:academicFiguresMcp.configureApiKey)\n[Setup Wizard](command:academicFiguresMcp.setupWizard)\n[Create Env File](command:academicFiguresMcp.createEnvironmentFile)"
+      }
+    ],
     "walkthroughs": [
       {
         "id": "academicFigures.getStarted",

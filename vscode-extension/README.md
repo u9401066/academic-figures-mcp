@@ -45,6 +45,8 @@
 
 1. Start asking Copilot to generate figures.
 
+If you skip the wizard, open the Academic Figures activity bar and click the key button in the view toolbar to paste a provider key directly into SecretStorage.
+
 ## Providers
 
 | Provider | Key | Default Model |
@@ -77,6 +79,8 @@ Once installed, the harness is available to GitHub Copilot through MCP. Try aski
 ### Status Bar
 
 Click the **AFM** status bar item for quick access to all commands.
+
+The Academic Figures sidebar title bar also exposes one-click buttons for **Setup Wizard**, **Configure Connection**, and **Browse Knowledge Assets**.
 
 ### Walkthrough
 
@@ -131,7 +135,8 @@ Run **Get Started with Academic Figures MCP** from the Welcome tab for a guided 
 
 1. **MCP Provider**: Detects local source (`pyproject.toml`) or falls back to `uvx --from academic-figures-mcp afm-server`
 2. **Credential Source**: Injects credentials from SecretStorage, a configured env file, or the current process environment
-3. **Direct-Run CLI**: Commands collect input, run `afm-run`, and open the generated artifact or JSON report directly in VS Code
+3. **Bundled Knowledge Assets**: The extension packages its walkthrough and knowledge markdown files so packaged installs can browse them without needing the source repository checkout
+4. **Direct-Run CLI**: Commands collect input, run `afm-run`, and open the generated artifact or JSON report directly in VS Code
 
 ## Development
 

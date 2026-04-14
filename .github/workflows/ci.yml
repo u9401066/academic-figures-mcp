@@ -131,13 +131,34 @@ jobs:
           path: coverage.xml
           retention-days: 30
 
+  package-smoke:
+    name: 📦 Package Smoke (${{ matrix.os }})
+    needs: [lint, typecheck]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run package-mode smoke
+        run: uv run python scripts/package_smoke.py
+
   # ==========================================
   # 測試結果摘要
   # ==========================================
   summary:
     name: 📋 Summary
     if: always()
-    needs: [docs-check, lint, typecheck, security, test]
+    needs: [docs-check, lint, typecheck, security, test, package-smoke]
     runs-on: ubuntu-latest
     steps:
       - name: Generate Summary
@@ -151,6 +172,7 @@ jobs:
           echo "| 🔍 Type Check | ${{ needs.typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔒 Security Scan | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🧪 Tests (9 matrix) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Package Smoke (3 OS) | ${{ needs.package-smoke.result }} |" >> $GITHUB_STEP_SUMMARY
 
       - name: Verify all jobs passed
         run: |
@@ -158,7 +180,8 @@ jobs:
              [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.typecheck.result }}" != "success" ] || \
              [ "${{ needs.security.result }}" != "success" ] || \
-             [ "${{ needs.test.result }}" != "success" ]; then
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.package-smoke.result }}" != "success" ]; then
             echo "❌ One or more required jobs failed"
             exit 1
           fi
