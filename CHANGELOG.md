@@ -6,6 +6,24 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ## [Unreleased]
 
+## [0.3.1]
+
+### Added in 0.3.1
+
+- Added a file-backed metadata adapter so planning and generation can read PMID records from local JSON/YAML files for offline demos, fixed corpora, and smoke tests.
+- Added `AFM_METADATA_SOURCE`, `AFM_METADATA_FILE`, and `AFM_SMOKE_PMID` support for local metadata-driven smoke runs.
+- Added workflow_dispatch inputs to [publish.yml](.github/workflows/publish.yml) so an existing tag can be republished without deleting and recreating tags.
+
+### Changed in 0.3.1
+
+- Kept metadata retrieval behind the existing `MetadataFetcher` interface while making the infrastructure implementation selectable through config.
+- Updated release automation so VS Code Marketplace retries can target a specific tag and selected publish targets.
+
+### Fixed in 0.3.1
+
+- Prevented future provider image format regressions by inferring media type from actual image bytes instead of assuming `.png`.
+- Hardened release validation with passing Ruff, mypy, pytest, and file-backed smoke test coverage before the next tag.
+
 ### Added
 
 - Persisted generation manifests to `.academic-figures/manifests` with MCP tools for listing, replay, and journal retargeting (with before/after profile diffs).

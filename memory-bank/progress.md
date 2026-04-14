@@ -9,11 +9,12 @@
 - Fixed repository and extension image assets that were JPEG payloads saved with `.png` filenames by converting the tracked files to true PNG assets.
 - Hardened GeminiAdapter/edit output handling so generated image media types are inferred from actual bytes, preventing future fake-PNG regressions.
 - Verified release readiness with focused regression tests, full Python validation, a real-provider smoke test, `uv build`, and VS Code extension packaging.
+- Added a file-backed MetadataFetcher adapter, wired it through config and the DI container, and verified it with unit tests plus a real-provider smoke test using local YAML metadata.
 
 ## Doing
 
-- Repository is in a publish-ready validated state; current work is preparing segmented commits and release tag execution.
+- Repository is validated for a new pre-tag pass; current work is deciding whether to add a sidecar/MCP metadata adapter next or freeze this tag with the file-backed adapter only.
 
 ## Next
 
-- Commit the validated changes in reviewable slices, push them to `main`, and create the release tag that triggers publish automation.
+- If needed, add a sidecar/MCP-backed metadata adapter above the same MetadataFetcher boundary; otherwise keep this tag focused and fix the VS Code Marketplace PAT before republishing.

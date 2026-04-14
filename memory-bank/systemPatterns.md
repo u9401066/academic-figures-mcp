@@ -67,3 +67,15 @@ External image providers may return JPEG bytes even when older flows or callers 
 - src/infrastructure/gemini_adapter.py
 - src/application/edit_figure.py
 - src/domain/entities.py
+
+
+## Keep metadata retrieval pluggable behind MetadataFetcher
+
+The application layer should continue to depend on a narrow `MetadataFetcher` interface that returns only normalized `Paper` metadata. Infrastructure can then swap between direct PubMed E-utilities, file-backed demo corpora, or later sidecar/MCP adapters without changing plan/generate use cases.
+
+### Examples
+
+- src/domain/interfaces.py
+- src/infrastructure/pubmed_client.py
+- src/infrastructure/file_metadata_fetcher.py
+- src/presentation/dependencies.py

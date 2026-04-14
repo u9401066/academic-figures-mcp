@@ -2,8 +2,8 @@
 
 ## Current Goals
 
-- Finalizing release hardening for academic-figures-mcp: automate publish to PyPI/VS Code Marketplace, validate packaging assets, and prevent provider-generated JPEG bytes from being saved under `.png` filenames.
+- Finalizing pre-tag hardening for academic-figures-mcp: keep release automation stable while making metadata retrieval pluggable through the existing MetadataFetcher boundary.
 
 ## Current Blockers
 
-- No active product blockers. Remaining work is release execution: segmented commits, push, and tag creation after the validated publish-ready state is reviewed.
+- No code blockers. Remaining release blocker is external: VS Code Marketplace still needs a valid VSCE PAT because that ecosystem does not support PyPI-style Trusted Publisher OIDC.
