@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ## [Unreleased]
 
+## [0.4.2]
+
+### Changed in 0.4.2
+
+- The VS Code extension local-source runtime now launches the dev MCP server through `src.server`, which keeps one canonical FastMCP instance alive during stdio startup.
+- The extension-generated `.vscode/mcp.json` now migrates legacy `academicFigures` entries into the canonical `academic-figures` server entry while preserving existing `envFile` or `env` settings.
+
+### Fixed in 0.4.2
+
+- Fixed local dev MCP sessions in VS Code so `ListToolsRequest` no longer returns zero tools when the workspace source tree is launched through `uv run ... python -m ...`.
+- Fixed workspace MCP bootstrap drift by rewriting legacy `src.presentation.server` launch targets to the `src.server` shim used by the canonical server module.
+
 ## [0.4.1]
 
 ### Added in 0.4.1
