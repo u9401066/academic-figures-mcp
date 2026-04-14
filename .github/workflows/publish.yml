@@ -7,16 +7,16 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to publish (for example: v0.3.0)
+        description: "Existing release tag to publish (for example: v0.3.0)"
         required: true
         type: string
       publish_pypi:
-        description: Publish the Python package to PyPI
+        description: "Publish the Python package to PyPI"
         required: true
         default: false
         type: boolean
       publish_vscode:
-        description: Publish the VS Code extension / Open VSX package
+        description: "Publish the VS Code extension / Open VSX package"
         required: true
         default: true
         type: boolean
