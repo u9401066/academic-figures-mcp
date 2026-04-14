@@ -58,8 +58,8 @@ title               — figure title text block
 subtitle            — subtitle or section header
 text_block          — body text, annotation, or footnote
 label               — panel label (A, B, C) or axis label
-arrow               — directional arrow or connector line
-connector           — line, polyline, or curve linking two nodes (with optional mid-label)
+arrow               — standalone directional indicator (e.g., "↑ increased", pointing at a region)
+connector           — line, polyline, or curve linking two nodes in a diagram (with optional mid-label)
 flowchart_node      — a process / decision / terminal box in a flowchart
 icon                — small symbolic element (drug icon, organ icon)
 anatomical_region   — anatomical illustration area
@@ -89,7 +89,7 @@ A `LayerGroup` bundles related layers into a logical unit — similar to "Group"
 **Key rules:**
 
 1. A `Layer` with `parent_group_id` set is a child of that group. A layer with `parent_group_id = None` is a top-level element.
-2. Groups can contain other groups (nesting). Depth is capped at 4 levels to prevent runaway recursion.
+2. Groups can contain other groups (nesting). Depth is capped at **4 levels of child nesting** below the scene root (i.e., scene → group → group → group → group). This prevents runaway recursion while supporting structures like: scene → swimlane → step → box+text.
 3. **Group-level operations**: moving, scaling, or restyling a group applies the transform to every descendant. This mirrors the "select group → drag" interaction in PPTX.
 4. `bbox` on a group is always the tightest rectangle enclosing all children. It is recomputed whenever a child moves or resizes.
 
@@ -746,13 +746,13 @@ Phase 1 requires **no new dependencies** — it uses existing Gemini + Pillow.
 
 4. **PSD export feasibility on all platforms?** `psd-tools` is pure Python but the format is complex. Current recommendation: SVG as primary export, PSD as best-effort.
 
-5. **Can Gemini Vision reliably produce group hierarchies for flowcharts?** Early experiments needed. If Gemini returns only flat bounding boxes, the grouping heuristic must infer groups from spatial proximity (box-contains-text → group, arrow-endpoint-near-box → link). Phase 1 fallback: spatial-proximity grouping algorithm in `GeminiSegmenter`.
+5. **Can Gemini Vision reliably produce group hierarchies for flowcharts?** Early experiments needed. If Gemini returns only flat bounding boxes, the grouping heuristic must infer groups from spatial proximity (box-contains-text → group, arrow-endpoint-near-box → link). Phase 1 fallback: spatial-proximity grouping algorithm in `GeminiSegmenter`. **Decision deadline**: resolve during Phase 1 prototype milestone (first 2 weeks). Success criteria: ≥ 70% of flowchart nodes correctly grouped with their inner text on a 10-figure test set.
 
 6. **PPTX connector shape accuracy?** `python-pptx` supports connector shapes but anchor positioning is fragile. Alternative: render connectors as line shapes (not true connectors) with arrowhead markers. Revisit once prototype validates.
 
 7. **Should `decomposition_depth` be per-figure-type?** A flowchart may need `standard` while a simple bar chart only needs `shallow`. Current recommendation: allow per-call override, but each figure-type strategy has a sensible default.
 
-8. **Text extraction for PPTX text shapes**: should we use OCR (Tesseract / Gemini vision) or store the original prompt text? Current recommendation: prefer prompt-derived text when available (from `planned_payload`), fall back to Gemini-based text recognition.
+8. **Text extraction for PPTX text shapes**: should we use OCR (Tesseract / Gemini vision) or store the original prompt text? Current recommendation: prefer prompt-derived text when available (from `planned_payload`), fall back to Gemini-based text recognition. **MVP approach for Phase 1**: use prompt-derived text from `planned_payload.expected_labels` and manifest metadata. OCR fallback deferred to Phase 2.
 
 ---
 
