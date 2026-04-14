@@ -2,13 +2,14 @@
 
 ## Done
 
-- Published AFM v0.4.1 with packaged VS Code extension onboarding fixes, bundled markdown docs, and cross-platform install guidance.
-- Added a GitHub Actions package-smoke matrix and fixed its Windows Unicode output issue by forcing UTF-8 for the uvx child process.
+- Fixed the VS Code local MCP launch path to use src.server so the FastMCP tool registry is not split across __main__ and src.presentation.server.
+- Updated the workspace MCP settings migration so legacy academicFigures entries are rewritten to the canonical academic-figures entry while preserving envFile or env settings.
+- Validated the fix with extension compile, extension-host smoke, and a real dev stdio MCP session that returned 11 tools and 2 prompts.
 
 ## Doing
 
-- Keeping main green after the 0.4.1 release by landing the post-release Windows package-smoke fix.
+- Preparing the verified MCP zero-tools fix for the v0.4.2 patch release.
 
 ## Next
 
-- Verify the follow-up main CI run succeeds after the Windows package-smoke UTF-8 fix.
+- Reload the VS Code window or restart the Academic Figures MCP server after upgrading so VS Code reconnects to the fixed local runtime.

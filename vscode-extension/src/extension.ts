@@ -408,26 +408,19 @@ function registerCommands(
     fs.mkdirSync(vscodeDir, { recursive: true });
 
     const current = readJsonFile(settingsPath);
+    const currentServers = toObjectRecord(current.servers) ?? {};
+    const mergedServer = {
+      ...(toObjectRecord(currentServers.academicFigures) ?? {}),
+      ...(toObjectRecord(currentServers["academic-figures"]) ?? {}),
+    };
+    const nextServers = { ...currentServers };
+    delete nextServers.academicFigures;
+
     const next = {
       ...current,
       servers: {
-        ...(typeof current.servers === "object" && current.servers ? current.servers : {}),
-        "academic-figures": {
-          type: "stdio",
-          command: "uv",
-          args: ["run", "--project", "${workspaceFolder}", "python", "-m", "src.presentation.server"],
-          env: {
-            AFM_IMAGE_PROVIDER: "${env:AFM_IMAGE_PROVIDER}",
-            GOOGLE_API_KEY: "${env:GOOGLE_API_KEY}",
-            OPENROUTER_API_KEY: "${env:OPENROUTER_API_KEY}",
-            OPENROUTER_BASE_URL: "${env:OPENROUTER_BASE_URL}",
-            OPENROUTER_HTTP_REFERER: "${env:OPENROUTER_HTTP_REFERER}",
-            OPENROUTER_APP_TITLE: "${env:OPENROUTER_APP_TITLE}",
-            GEMINI_MODEL: "${env:GEMINI_MODEL}",
-            OLLAMA_BASE_URL: "${env:OLLAMA_BASE_URL}",
-            OLLAMA_MODEL: "${env:OLLAMA_MODEL}",
-          },
-        },
+        ...nextServers,
+        "academic-figures": buildWorkspaceMcpServerDefinition(mergedServer),
       },
     };
 
@@ -970,6 +963,31 @@ function readJsonFile(filePath: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value ? (value as Record<string, unknown>) : undefined;
+}
+
+function buildWorkspaceMcpServerDefinition(
+  existing: Record<string, unknown>,
+): Record<string, unknown> {
+  const server: Record<string, unknown> = {
+    type: "stdio",
+    command: "uv",
+    args: ["run", "--project", "${workspaceFolder}", "python", "-m", "src.server"],
+  };
+
+  if (typeof existing.envFile === "string" && existing.envFile.trim()) {
+    server.envFile = existing.envFile;
+  }
+
+  const existingEnv = toObjectRecord(existing.env);
+  if (existingEnv) {
+    server.env = existingEnv;
+  }
+
+  return server;
 }
 
 function escapeHtml(value: string): string {

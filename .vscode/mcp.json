@@ -1,8 +1,7 @@
 {
   "servers": {
-    "academicFigures": {
+    "academic-figures": {
       "type": "stdio",
-      "envFile": "${workspaceFolder}/env",
       "command": "uv",
       "args": [
         "run",
@@ -10,8 +9,9 @@
         "${workspaceFolder}",
         "python",
         "-m",
-        "src.presentation.server"
-      ]
+        "src.server"
+      ],
+      "envFile": "${workspaceFolder}/env"
     }
   }
 }

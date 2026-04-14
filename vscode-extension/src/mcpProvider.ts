@@ -167,7 +167,7 @@ export class AcademicFiguresMcpProvider
         command: "uv",
         args:
           target === "server"
-            ? ["run", pythonCommand, "-m", "src.presentation.server"]
+            ? ["run", pythonCommand, "-m", "src.server"]
             : ["run", pythonCommand, "-m", "src.presentation.direct_run"],
         cwd: localRoot,
       };
