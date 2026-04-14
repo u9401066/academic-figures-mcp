@@ -49,6 +49,10 @@ class GenerationResult:
             return ".svg"
         if self.media_type == "image/jpeg":
             return ".jpg"
+        if self.media_type == "image/gif":
+            return ".gif"
+        if self.media_type == "image/webp":
+            return ".webp"
         return ".png"
 
     def save(self, path: str | Path) -> Path:

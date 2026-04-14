@@ -28,6 +28,40 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_JPEG_SIGNATURE = b"\xff\xd8\xff"
+_GIF_SIGNATURES = (b"GIF87a", b"GIF89a")
+
+
+def _normalize_image_media_type(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = value.split(";", 1)[0].strip().lower()
+    if normalized == "image/jpg":
+        return "image/jpeg"
+    return normalized
+
+
+def _detect_image_media_type(image_bytes: bytes, *, hinted_media_type: str | None = None) -> str:
+    normalized_hint = _normalize_image_media_type(hinted_media_type)
+    stripped = image_bytes.lstrip()
+
+    if image_bytes.startswith(_PNG_SIGNATURE):
+        return "image/png"
+    if image_bytes.startswith(_JPEG_SIGNATURE):
+        return "image/jpeg"
+    if any(image_bytes.startswith(signature) for signature in _GIF_SIGNATURES):
+        return "image/gif"
+    if image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    if stripped.startswith(b"<svg") or (
+        stripped.startswith(b"<?xml") and b"<svg" in stripped[:512]
+    ):
+        return "image/svg+xml"
+    if normalized_hint is not None:
+        return normalized_hint
+    return "image/png"
+
 
 class GeminiAdapter(ImageGenerator):
     """Wraps Google, OpenRouter, and Ollama-backed figure workflows."""
@@ -81,7 +115,8 @@ class GeminiAdapter(ImageGenerator):
             )
 
         img_bytes = image_path.read_bytes()
-        mime = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
+        suffix_hint = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
+        mime = _detect_image_media_type(img_bytes, hinted_media_type=suffix_hint)
 
         if self._config.is_ollama:
             return self._edit_via_ollama(
@@ -789,6 +824,7 @@ class GeminiAdapter(ImageGenerator):
         text = self._extract_message_text(data)
 
         image_bytes: bytes | None = None
+        hinted_media_type: str | None = None
         raw_choices = data.get("choices")
         choices = raw_choices if isinstance(raw_choices, list) else []
         first_choice = choices[0] if choices else {}
@@ -806,7 +842,9 @@ class GeminiAdapter(ImageGenerator):
             image_url = image_url_data.get("url") or image_url_alt.get("url")
             if isinstance(image_url, str) and image_url.startswith("data:"):
                 try:
-                    image_bytes = base64.b64decode(image_url.split(",", 1)[1])
+                    header, encoded = image_url.split(",", 1)
+                    hinted_media_type = header[5:].split(";", 1)[0]
+                    image_bytes = base64.b64decode(encoded)
                     break
                 except Exception:
                     image_bytes = None
@@ -825,7 +863,10 @@ class GeminiAdapter(ImageGenerator):
             text=text,
             model=model_name,
             elapsed_seconds=elapsed,
-            media_type="image/png",
+            media_type=_detect_image_media_type(
+                image_bytes,
+                hinted_media_type=hinted_media_type,
+            ),
         )
 
     def _parse_response(
@@ -835,11 +876,14 @@ class GeminiAdapter(ImageGenerator):
         start: float,
     ) -> GenerationResult:
         image_bytes: bytes | None = None
+        hinted_media_type: str | None = None
         text_parts: list[str] = []
 
         for part in self._response_parts(response):
-            if getattr(part, "inline_data", None) is not None:
-                image_bytes = part.inline_data.data
+            inline_data = getattr(part, "inline_data", None)
+            if inline_data is not None:
+                image_bytes = inline_data.data
+                hinted_media_type = getattr(inline_data, "mime_type", None)
             elif getattr(part, "text", None) is not None:
                 text_parts.append(part.text)
 
@@ -857,7 +901,7 @@ class GeminiAdapter(ImageGenerator):
             text="\n".join(text_parts),
             model=model_name,
             elapsed_seconds=round(elapsed, 2),
-            media_type="image/png",
+            media_type=_detect_image_media_type(image_bytes, hinted_media_type=hinted_media_type),
         )
 
     def _response_parts(self, response: types.GenerateContentResponse) -> list[Any]:
@@ -886,11 +930,14 @@ class EditSession:
         self.turns += 1
 
         image_bytes: bytes | None = None
+        hinted_media_type: str | None = None
         text_parts: list[str] = []
 
         for part in getattr(response, "parts", []) or []:
-            if getattr(part, "inline_data", None) is not None:
-                image_bytes = part.inline_data.data
+            inline_data = getattr(part, "inline_data", None)
+            if inline_data is not None:
+                image_bytes = inline_data.data
+                hinted_media_type = getattr(inline_data, "mime_type", None)
             elif getattr(part, "text", None) is not None:
                 text_parts.append(part.text)
 
@@ -900,5 +947,10 @@ class EditSession:
             text="\n".join(text_parts),
             model=self.model,
             elapsed_seconds=round(elapsed, 2),
+            media_type=(
+                _detect_image_media_type(image_bytes, hinted_media_type=hinted_media_type)
+                if image_bytes is not None
+                else "image/png"
+            ),
             error="" if image_bytes else "No image returned",
         )

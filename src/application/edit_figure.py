@@ -38,7 +38,11 @@ class EditFigureUseCase:
                 "elapsed_seconds": result.elapsed_seconds,
             }
 
-        save_to = Path(req.output_path) if req.output_path else img.with_stem(f"{img.stem}_edited")
+        save_to = self._resolve_output_path(
+            source_path=img,
+            requested_output_path=req.output_path,
+            extension=result.file_extension,
+        )
         result.save(save_to)
 
         return {
@@ -50,3 +54,15 @@ class EditFigureUseCase:
             "elapsed_seconds": result.elapsed_seconds,
             "gemini_text": result.text,
         }
+
+    @staticmethod
+    def _resolve_output_path(
+        *,
+        source_path: Path,
+        requested_output_path: str | None,
+        extension: str,
+    ) -> Path:
+        if requested_output_path:
+            target = Path(requested_output_path)
+            return target if target.suffix.lower() == extension else target.with_suffix(extension)
+        return source_path.with_name(f"{source_path.stem}_edited{extension}")
