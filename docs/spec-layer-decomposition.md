@@ -268,6 +268,90 @@ Modify the generation pipeline to produce layered output natively:
 
 **Limitations**: Requires a fundamentally different generation contract. Higher generation cost (N calls instead of 1).
 
+### 4.4 Figure-Type-Specific Strategies
+
+Different academic figure types have fundamentally different structural properties. A single generic segmentation pass cannot handle all of them well. The segmenter must dispatch to **figure-type-aware strategies** that understand the expected layout grammar.
+
+#### 4.4.1 Flowcharts / Clinical Guideline Diagrams
+
+**Challenge**: Flowcharts contain many small, tightly-packed elements — boxes, decision diamonds, connector arrows, inline text labels, yes/no branch annotations, and sometimes swim-lane headers. A naïve bounding-box segmentation will either:
+
+- **Over-merge**: treat a box + its text as one opaque blob (cannot edit text independently).
+- **Over-split**: create 50+ micro-layers for every text run and line segment (unusable).
+
+**Strategy: Two-pass hierarchical segmentation**
+
+```
+Pass 1 — Structure detection (coarse)
+  → Identify nodes (process boxes, decision diamonds, terminators)
+  → Identify connectors (arrows, lines) between nodes
+  → Identify global elements (title, legend, footnotes)
+  → Output: coarse layer list + spatial graph of node-connector relationships
+
+Pass 2 — Intra-node decomposition (fine)
+  → For each detected node, run a second segmentation:
+      • Box border → border sub-layer
+      • Inner text → text_block sub-layer(s)
+      • Icon inside box (if any) → icon sub-layer
+  → Automatically group into a LayerGroup (category: flowchart_step or flowchart_branch)
+
+Pass 3 — Connector-to-group binding
+  → For each connector layer, identify which two nodes it links
+  → Store as metadata: { "from": "grp-step1", "to": "grp-step2" }
+  → Optionally group connector + its mid-label into a child group
+```
+
+**Granularity knob**: The user can set `decomposition_depth`:
+
+| Value | Behavior | Layer count (typical 8-step flowchart) |
+|-------|----------|---------------------------------------|
+| `shallow` | Each node is one opaque layer; connectors are separate | ~15–20 layers |
+| `standard` (default) | Nodes decomposed into box + text; connectors separate | ~30–40 layers |
+| `deep` | Every text run, line segment, and arrowhead is a layer | ~60–100 layers |
+
+At `standard` depth, every node becomes a `LayerGroup` containing its box and text. This gives users PPTX-like control: drag the group to move a step, or expand the group to edit the text inside.
+
+**Connector handling**: Connectors (arrows, lines) are special because they are thin, elongated, and often overlap with node borders. The segmenter should:
+
+1. Detect connector paths as polyline/bezier coordinates, not just bounding boxes.
+2. Store path geometry in `metadata.path_points` for accurate SVG/PPTX export.
+3. When a connector has a text label (e.g., "Yes" / "No"), group the label with the connector.
+
+#### 4.4.2 Mechanism / Pathway Diagrams
+
+**Challenge**: Drug mechanism figures have overlapping regions — receptor icons sit on top of cell membranes, arrow cascades overlap with text annotations.
+
+**Strategy**:
+- Use z-index ordering from background (cell membrane) → foreground (receptor icons, drug molecules).
+- Group: receptor + binding site + drug molecule → `annotation_cluster` group.
+- Pathway arrows form chains; group sequential arrows into `composite_block`.
+
+#### 4.4.3 Statistical / Data Visualization
+
+**Challenge**: Charts have precise axes, gridlines, data points, and legends that are spatially dense.
+
+**Strategy**:
+- Treat axes + gridlines as a single `border` layer (not individually split).
+- Each data series (bar group, line, scatter set) → one layer.
+- Legend → `legend_group` with one sub-layer per legend entry.
+- Title and axis labels → separate `text_block` layers.
+
+#### 4.4.4 Anatomical Illustrations
+
+**Challenge**: Overlapping regions (organs, tissue layers), callout lines radiating from one point.
+
+**Strategy**:
+- Each labelled anatomical region → `anatomical_region` layer with alpha mask (not bbox).
+- Callout lines + their text → `annotation_cluster` group per callout.
+- Background body outline → `background` layer.
+
+#### 4.4.5 Composite / Multi-Panel Figures
+
+**Strategy**:
+- Top-level pass: detect each sub-panel → `panel` layer.
+- Per-panel recursive segmentation: each panel is segmented independently using the appropriate figure-type strategy.
+- Panel labels (A, B, C) → `label` layers grouped with their panel.
+
 ## 5. MCP Tool Surface
 
 ### 5.1 `decompose_figure`
@@ -277,21 +361,22 @@ decompose_figure(
     image_path: str,
     figure_type: str = "auto",
     language: str = "zh-TW",
+    decomposition_depth: str = "standard",   # "shallow" | "standard" | "deep"
     expected_labels: list[str] | None = None,
     manifest_id: str | None = None,
 ) → FigureScenePayload
 ```
 
-Segments a generated figure into layers. If `manifest_id` is provided, links the scene to the original generation manifest for traceability.
+Segments a generated figure into layers and groups. If `manifest_id` is provided, links the scene to the original generation manifest for traceability. The `decomposition_depth` controls granularity (see §4.4.1).
 
-**Returns**: Scene ID, list of layers with bounding boxes, labels, categories, and confidence scores.
+**Returns**: Scene ID, list of layers with bounding boxes, list of groups, labels, categories, and confidence scores.
 
 ### 5.2 `edit_layer`
 
 ```
 edit_layer(
     scene_id: str,
-    layer_id: str,
+    layer_id: str,         # may also be a group_id for group-level operations
     action: str,
     params: dict,
 ) → LayerEditResult
@@ -301,13 +386,15 @@ edit_layer(
 
 | Action | Params | Description |
 |--------|--------|-------------|
-| `move` | `dx`, `dy` | Translate layer position |
+| `move` | `dx`, `dy` | Translate layer (or group) position |
 | `resize` | `scale` or `width`, `height` | Scale or resize |
 | `restyle` | `opacity`, `fill_color`, `stroke_color`, etc. | Change visual properties |
 | `replace` | `prompt`, `model` | Regenerate this layer's content |
-| `remove` | — | Remove layer from scene |
-| `duplicate` | `new_label` | Clone layer |
+| `remove` | — | Remove layer (or group and all children) from scene |
+| `duplicate` | `new_label` | Clone layer (or group) |
 | `reorder` | `z_index` | Change stacking order |
+| `group` | `target_ids: list[str]` | Create a new LayerGroup from the specified layers |
+| `ungroup` | — | Dissolve a group, promoting children to top level |
 
 ### 5.3 `recompose_scene`
 
