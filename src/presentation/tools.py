@@ -90,9 +90,7 @@ def plan_figure(
             or normalized_source_identifier is not None
             or normalized_source_kind != "paper"
         ):
-            raise ValidationError(
-                "source_* fields are only supported when pmid is omitted"
-            )
+            raise ValidationError("source_* fields are only supported when pmid is omitted")
         request = PlanFigureRequest(
             pmid=normalized_pmid,
             source_title=normalized_source_title,
@@ -160,9 +158,7 @@ def generate_figure(
                 or normalized_source_identifier is not None
                 or normalized_source_kind != "paper"
             ):
-                raise ValidationError(
-                    "source_* fields are only supported when pmid is omitted"
-                )
+                raise ValidationError("source_* fields are only supported when pmid is omitted")
         elif (
             pmid is not None
             or source_title is not None
@@ -170,9 +166,7 @@ def generate_figure(
             or source_identifier is not None
             or source_kind != "paper"
         ):
-            raise ValidationError(
-                "Provide either planned_payload or source inputs, not both"
-            )
+            raise ValidationError("Provide either planned_payload or source inputs, not both")
 
         request = GenerateFigureRequest(
             pmid=normalized_pmid,

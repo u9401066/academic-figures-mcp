@@ -1,5 +1,7 @@
 # Academic Figures MCP VS Code Extension
 
+![Academic Figures MCP banner](https://raw.githubusercontent.com/u9401066/academic-figures-mcp/HEAD/vscode-extension/resources/banner.png)
+
 🔬 A workflow-first academic figure agent harness — help agents work through multi-step academic planning and produce publication-grade figures through MCP, packaged as a VS Code extension so non-engineers can get started quickly.
 
 ## ✨ Features

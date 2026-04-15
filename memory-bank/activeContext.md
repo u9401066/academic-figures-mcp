@@ -2,8 +2,9 @@
 
 ## Current Goals
 
-- 0.4.3 is now pushed to main and tagged. Core AFM planning/review/output-format changes and extension branding updates are released on git; local marketplace publish was skipped because VSCE_PAT and OVSX_PAT were absent, so the remaining follow-up is to confirm GitHub Actions publication or publish from a credentialed shell.
+- Ship 0.4.4 from main with the release-gate formatting fix, validated extension banner assets, and the updated VS Code extension metadata.
+- Push the 0.4.4 release commit and annotated tag, then confirm the publish workflow is triggered from GitHub Actions.
 
 ## Current Blockers
 
-- No code blockers. Remaining release blocker is external: VS Code Marketplace still needs a valid VSCE PAT because that ecosystem does not support PyPI-style Trusted Publisher OIDC.
+- No local code blockers. The remaining release dependency is external: Marketplace and Open VSX publication still depend on repository secrets and GitHub Actions execution.

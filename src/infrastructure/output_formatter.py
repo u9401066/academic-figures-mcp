@@ -24,9 +24,7 @@ class PillowOutputFormatter(OutputFormatter):
         "webp": "image/webp",
         "svg": "image/svg+xml",
     }
-    _RASTER_OUTPUT_FORMATS: ClassVar[frozenset[str]] = frozenset(
-        {"png", "gif", "jpeg", "webp"}
-    )
+    _RASTER_OUTPUT_FORMATS: ClassVar[frozenset[str]] = frozenset({"png", "gif", "jpeg", "webp"})
 
     def normalize_output_format(self, value: str | None) -> str | None:
         if value is None:

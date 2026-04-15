@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ## [Unreleased]
 
+## [0.4.4]
+
+### Fixed in 0.4.4
+
+- Fixed release workflow drift by applying Ruff formatting to the remaining Python files that caused the `Quality Gate` job in `publish.yml` to fail before packaging and Marketplace publication.
+
 ## [0.4.3]
 
 ### Added in 0.4.3

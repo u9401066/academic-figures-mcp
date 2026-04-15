@@ -65,9 +65,7 @@ class GenerateFigureRequest:
                 or self.source_identifier is not None
                 or self.source_kind != "paper"
             ):
-                raise ValidationError(
-                    "Provide either planned_payload or source inputs, not both"
-                )
+                raise ValidationError("Provide either planned_payload or source inputs, not both")
             return
 
         if self.pmid is None and self.source_title is None:
@@ -158,9 +156,7 @@ class GenerateFigureUseCase:
             {
                 "pmid": plan_result.get("pmid", req.pmid),
                 "source_kind": plan_result.get("source_kind", req.source_kind),
-                "source_identifier": plan_result.get(
-                    "source_identifier", req.source_identifier
-                ),
+                "source_identifier": plan_result.get("source_identifier", req.source_identifier),
                 "title": plan_result.get("title", generated_result.get("title")),
                 "journal": plan_result.get("journal"),
                 "figure_type": plan_result.get(

@@ -128,8 +128,7 @@ def test_plan_figure_accepts_generic_repo_brief_without_fetching() -> None:
         PlanFigureRequest(
             source_title="HyperHierarchicalRAG repository overview",
             source_summary=(
-                "A repository that explains hierarchical retrieval and agent "
-                "workflow design."
+                "A repository that explains hierarchical retrieval and agent workflow design."
             ),
             source_kind="repo",
             source_identifier="github.com/example/hhrag",
