@@ -4,12 +4,14 @@
 
 - 確認 0.4.4 release gate 全數通過：ruff check、ruff format --check、mypy、bandit、pytest
 - 完成 Python 套件建置與 VS Code extension VSIX 打包驗證
+- 已建立並推送 0.4.4 release commit 到 main
+- 已建立並推送 annotated tag v0.4.4
+- 確認 GitHub Actions 的 Publish workflow 已因 v0.4.4 tag 觸發並開始執行
 
 ## Doing
 
-- 整理工作樹並準備推送 0.4.4 release commit 與 tag
+- 觀察 v0.4.4 publish workflow 的遠端執行結果
 
 ## Next
 
-- 提交 0.4.4 release commit、push main、建立並推送 v0.4.4 tag
-- 確認 publish workflow 已由新 tag 觸發
+- 確認 VS Code Marketplace 與 Open VSX 已完成發佈

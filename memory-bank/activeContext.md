@@ -2,9 +2,9 @@
 
 ## Current Goals
 
-- Ship 0.4.4 from main with the release-gate formatting fix, validated extension banner assets, and the updated VS Code extension metadata.
-- Push the 0.4.4 release commit and annotated tag, then confirm the publish workflow is triggered from GitHub Actions.
+- Confirm the remote publish flow for 0.4.4 completes after the already-pushed main commit and annotated tag.
+- Verify Marketplace and Open VSX pick up the validated extension banner and 0.4.4 package metadata.
 
 ## Current Blockers
 
-- No local code blockers. The remaining release dependency is external: Marketplace and Open VSX publication still depend on repository secrets and GitHub Actions execution.
+- No local code blockers. Remaining risk is external: Marketplace and Open VSX publication still depend on GitHub Actions execution and configured repository secrets.
