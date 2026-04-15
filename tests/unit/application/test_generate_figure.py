@@ -1,11 +1,24 @@
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 from typing import cast
 
+import pytest
+from PIL import Image
+
 from src.application.generate_figure import GenerateFigureRequest, GenerateFigureUseCase
 from src.domain.entities import GenerationManifest, GenerationResult, Paper
-from src.domain.interfaces import ImageGenerator, ManifestStore, MetadataFetcher, PromptBuilder
+from src.domain.exceptions import ValidationError
+from src.domain.interfaces import (
+    ImageGenerator,
+    ImageVerifier,
+    ManifestStore,
+    MetadataFetcher,
+    PromptBuilder,
+)
+from src.domain.value_objects import QualityVerdict
+from src.infrastructure.output_formatter import PillowOutputFormatter
 
 
 class FailFetcher(MetadataFetcher):
@@ -111,11 +124,35 @@ class StubComposer:
         )
         out_path = Path(output_path or (self.output_dir / "composite.png"))
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(b"composite")
+        out_path.write_bytes(_png_bytes())
         return {
             "status": "success",
             "output_path": str(out_path),
         }
+
+
+class StubVerifier(ImageVerifier):
+    def __init__(self, verdict: QualityVerdict) -> None:
+        self.verdict = verdict
+        self.calls: list[dict[str, object]] = []
+
+    def verify(
+        self,
+        image_bytes: bytes,
+        *,
+        expected_labels: list[str],
+        figure_type: str,
+        language: str,
+    ) -> QualityVerdict:
+        self.calls.append(
+            {
+                "image_bytes": image_bytes,
+                "expected_labels": expected_labels,
+                "figure_type": figure_type,
+                "language": language,
+            }
+        )
+        return self.verdict
 
 
 class BridgePromptBuilder(PromptBuilder):
@@ -132,7 +169,8 @@ class BridgePromptBuilder(PromptBuilder):
         expected_labels: list[str] | None = None,
     ) -> str:
         self.build_calls += 1
-        return f"planned::{paper.pmid}::{figure_type}::{language}::{output_size}"
+        source_marker = paper.pmid or paper.source_identifier or paper.title
+        return f"planned::{source_marker}::{figure_type}::{language}::{output_size}"
 
     def inject_journal_requirements(
         self,
@@ -154,6 +192,12 @@ class BridgePromptBuilder(PromptBuilder):
         return prompt, None
 
 
+def _png_bytes() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGBA", (2, 2), (20, 120, 200, 255)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def test_generate_figure_supports_generic_planned_payload(tmp_path: Path) -> None:
     generator = StubGenerator()
     prompt_builder = StubPromptBuilder()
@@ -162,6 +206,7 @@ def test_generate_figure_supports_generic_planned_payload(tmp_path: Path) -> Non
         generator=generator,
         prompt_builder=prompt_builder,
         output_dir=str(tmp_path),
+        output_formatter=PillowOutputFormatter(),
     )
 
     payload = {
@@ -200,7 +245,7 @@ def test_generate_figure_supports_generic_planned_payload(tmp_path: Path) -> Non
     assert result["generation_contract"] == "planned_payload"
 
 
-def test_generate_figure_pmid_bridge_runs_internal_plan_first(tmp_path: Path) -> None:
+def test_generate_figure_pmid_single_entry_runs_internal_plan_first(tmp_path: Path) -> None:
     generator = StubGenerator()
     prompt_builder = BridgePromptBuilder()
     use_case = GenerateFigureUseCase(
@@ -208,6 +253,7 @@ def test_generate_figure_pmid_bridge_runs_internal_plan_first(tmp_path: Path) ->
         generator=generator,
         prompt_builder=prompt_builder,
         output_dir=str(tmp_path),
+        output_formatter=PillowOutputFormatter(),
     )
 
     result = use_case.execute(
@@ -220,15 +266,48 @@ def test_generate_figure_pmid_bridge_runs_internal_plan_first(tmp_path: Path) ->
     )
 
     assert result["status"] == "ok"
-    assert result["generation_contract"] == "pmid_compatibility_bridge"
+    assert result["generation_contract"] == "single_entry_plan_first"
     assert result["pmid"] == "12345678"
     assert result["figure_type"] == "infographic"
     assert Path(str(result["output_path"])).exists()
     assert generator.prompt == "planned::12345678::infographic::zh-TW::1024x1536::nature"
     assert prompt_builder.build_calls == 1
     assert prompt_builder.inject_calls == 1
-    warnings = cast("list[str]", result["warnings"])
-    assert any("plan-first compatibility bridge" in warning for warning in warnings)
+
+
+def test_generate_figure_generic_source_single_entry_runs_internal_plan_first(
+    tmp_path: Path,
+) -> None:
+    generator = StubGenerator()
+    prompt_builder = BridgePromptBuilder()
+    use_case = GenerateFigureUseCase(
+        fetcher=StubFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        output_dir=str(tmp_path),
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    result = use_case.execute(
+        GenerateFigureRequest(
+            source_title="HyperHierarchicalRAG repository overview",
+            source_summary="Explain the retrieval hierarchy and orchestrator flow.",
+            source_kind="repo",
+            source_identifier="github.com/example/hhrag",
+            figure_type="infographic",
+            output_dir=str(tmp_path),
+        )
+    )
+
+    assert result["status"] == "ok"
+    assert result["generation_contract"] == "single_entry_plan_first"
+    assert result["pmid"] is None
+    assert result["source_kind"] == "repo"
+    assert result["source_identifier"] == "github.com/example/hhrag"
+    assert Path(str(result["output_path"])).exists()
+    assert generator.prompt == "planned::github.com/example/hhrag::infographic::zh-TW::1024x1536"
+    assert prompt_builder.build_calls == 1
+    assert prompt_builder.inject_calls == 1
 
 
 def test_generate_figure_persists_manifest(tmp_path: Path) -> None:
@@ -241,6 +320,7 @@ def test_generate_figure_persists_manifest(tmp_path: Path) -> None:
         prompt_builder=prompt_builder,
         output_dir=str(tmp_path),
         manifest_store=manifest_store,
+        output_formatter=PillowOutputFormatter(),
     )
 
     payload = {
@@ -274,6 +354,8 @@ def test_generate_figure_persists_manifest(tmp_path: Path) -> None:
     assert manifest.prompt.startswith("## Block 1")
     assert manifest.prompt_base.startswith("## Block 1")
     assert manifest.render_route_used == "image_generation"
+    assert manifest.review_summary["policy"] == "provider_vision_required_host_optional"
+    assert manifest.review_history == []
 
 
 def test_generate_figure_handles_composite_render_route(tmp_path: Path) -> None:
@@ -288,6 +370,7 @@ def test_generate_figure_handles_composite_render_route(tmp_path: Path) -> None:
         output_dir=str(tmp_path),
         manifest_store=manifest_store,
         composer=composer,
+        output_formatter=PillowOutputFormatter(),
     )
 
     payload = {
@@ -310,3 +393,255 @@ def test_generate_figure_handles_composite_render_route(tmp_path: Path) -> None:
     assert composer.calls
     assert manifest_store.saved
     assert generator.prompt == ""
+
+
+def test_generate_figure_returns_quality_gate_for_image_generation(tmp_path: Path) -> None:
+    generator = StubGenerator()
+    prompt_builder = StubPromptBuilder()
+    manifest_store = StubManifestStore()
+    verifier = StubVerifier(
+        QualityVerdict(
+            passed=False,
+            domain_scores={"text_accuracy": 2.0, "layout": 4.0},
+            total_score=26.0,
+            critical_issues=("Text label mismatch",),
+            text_verification_passed=False,
+            missing_labels=("Acute MI",),
+            summary="Label fidelity is insufficient.",
+        )
+    )
+    use_case = GenerateFigureUseCase(
+        fetcher=FailFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        output_dir=str(tmp_path),
+        manifest_store=manifest_store,
+        verifier=verifier,
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    payload = {
+        "asset_kind": "repo_icon",
+        "title": "Academic Figures MCP",
+        "goal": "Create a distinctive icon for the Academic Figures MCP repository.",
+        "selected_figure_type": "infographic",
+        "render_route": "image_generation",
+        "language": "zh-TW",
+        "expected_labels": ["Acute MI"],
+        "source_context": {"repo": "academic-figures-mcp"},
+    }
+
+    result = use_case.execute(
+        GenerateFigureRequest(planned_payload=payload, output_dir=str(tmp_path))
+    )
+
+    quality_gate = cast("dict[str, object]", result["quality_gate"])
+    review_summary = cast("dict[str, object]", result["review_summary"])
+    warnings = cast("list[str]", result["warnings"])
+    assert quality_gate["passed"] is False
+    assert quality_gate["missing_labels"] == ["Acute MI"]
+    assert review_summary["provider_baseline_met"] is False
+    assert review_summary["requirement_met"] is False
+    assert review_summary["routes"]["host_vision"]["status"] == "external"
+    assert review_summary["recommended_next_action"] == "fix_and_rerun_provider_review"
+    review_history = cast("list[dict[str, object]]", result["review_history"])
+    assert review_history[0]["route"] == "provider_vision"
+    assert manifest_store.saved[0].review_history[0]["route"] == "provider_vision"
+    assert verifier.calls[0]["expected_labels"] == ["Acute MI"]
+    assert "Quality gate FAILED" in warnings[0]
+    assert "Missing/garbled labels: Acute MI" in warnings[1]
+
+
+def test_generate_figure_returns_quality_gate_for_composite_route(tmp_path: Path) -> None:
+    generator = StubGenerator()
+    prompt_builder = StubPromptBuilder()
+    manifest_store = StubManifestStore()
+    composer = StubComposer(tmp_path)
+    verifier = StubVerifier(
+        QualityVerdict(
+            passed=True,
+            domain_scores={"layout": 4.0, "visual_polish": 4.0},
+            total_score=32.0,
+            critical_issues=(),
+            text_verification_passed=True,
+            missing_labels=(),
+            summary="Composite passed the gate.",
+        )
+    )
+    use_case = GenerateFigureUseCase(
+        fetcher=FailFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        output_dir=str(tmp_path),
+        manifest_store=manifest_store,
+        composer=composer,
+        verifier=verifier,
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    payload = {
+        "asset_kind": "academic_figure",
+        "title": "Composite Assembly",
+        "selected_figure_type": "infographic",
+        "render_route": "composite_figure",
+        "expected_labels": ["Panel A", "Panel B"],
+        "panels": [
+            {"image_path": str(tmp_path / "panel-a.png"), "label": "A", "panel_type": "chart"},
+            {"image_path": str(tmp_path / "panel-b.png"), "label": "B", "panel_type": "anatomy"},
+        ],
+    }
+
+    result = use_case.execute(
+        GenerateFigureRequest(planned_payload=payload, output_dir=str(tmp_path))
+    )
+
+    quality_gate = cast("dict[str, object]", result["quality_gate"])
+    review_summary = cast("dict[str, object]", result["review_summary"])
+    assert result["status"] == "ok"
+    assert result["render_route_used"] == "composite_figure"
+    assert quality_gate["passed"] is True
+    assert review_summary["provider_baseline_met"] is True
+    assert review_summary["requirement_met"] is True
+    assert verifier.calls[0]["expected_labels"] == ["Panel A", "Panel B"]
+
+
+def test_generate_figure_converts_requested_output_format(tmp_path: Path) -> None:
+    class ConvertingGenerator(StubGenerator):
+        def generate(self, prompt: str, **_: object) -> GenerationResult:
+            self.prompt = prompt
+            return GenerationResult(
+                image_bytes=_png_bytes(),
+                media_type="image/png",
+                model="stub-model",
+            )
+
+    generator = ConvertingGenerator()
+    prompt_builder = StubPromptBuilder()
+    use_case = GenerateFigureUseCase(
+        fetcher=FailFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        output_dir=str(tmp_path),
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    payload = {
+        "asset_kind": "repo_icon",
+        "title": "Academic Figures MCP",
+        "goal": "Create a distinctive icon for the Academic Figures MCP repository.",
+        "selected_figure_type": "infographic",
+        "render_route": "image_generation",
+        "language": "en",
+        "output_size": "1024x1024",
+        "source_context": {"repo": "academic-figures-mcp"},
+    }
+
+    result = use_case.execute(
+        GenerateFigureRequest(
+            planned_payload=payload,
+            output_format="jpeg",
+            output_dir=str(tmp_path),
+        )
+    )
+
+    output_path = Path(str(result["output_path"]))
+    assert result["status"] == "ok"
+    assert result["output_format"] == "jpeg"
+    assert result["media_type"] == "image/jpeg"
+    assert output_path.suffix == ".jpg"
+    assert output_path.read_bytes().startswith(b"\xff\xd8\xff")
+
+
+def test_generate_figure_converts_requested_output_format_to_gif(tmp_path: Path) -> None:
+    class ConvertingGenerator(StubGenerator):
+        def generate(self, prompt: str, **_: object) -> GenerationResult:
+            self.prompt = prompt
+            return GenerationResult(
+                image_bytes=_png_bytes(),
+                media_type="image/png",
+                model="stub-model",
+            )
+
+    generator = ConvertingGenerator()
+    prompt_builder = StubPromptBuilder()
+    use_case = GenerateFigureUseCase(
+        fetcher=FailFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        output_dir=str(tmp_path),
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    payload = {
+        "asset_kind": "repo_icon",
+        "title": "Academic Figures MCP",
+        "goal": "Create a distinctive icon for the Academic Figures MCP repository.",
+        "selected_figure_type": "infographic",
+        "render_route": "image_generation",
+        "language": "en",
+        "output_size": "1024x1024",
+        "source_context": {"repo": "academic-figures-mcp"},
+    }
+
+    result = use_case.execute(
+        GenerateFigureRequest(
+            planned_payload=payload,
+            output_format="gif",
+            output_dir=str(tmp_path),
+        )
+    )
+
+    output_path = Path(str(result["output_path"]))
+    assert result["status"] == "ok"
+    assert result["output_format"] == "gif"
+    assert result["media_type"] == "image/gif"
+    assert output_path.suffix == ".gif"
+    assert output_path.read_bytes().startswith(b"GIF8")
+
+
+def test_generate_request_rejects_conflicting_source_modes() -> None:
+    with pytest.raises(ValidationError, match="Provide either planned_payload or source inputs"):
+        GenerateFigureRequest(planned_payload={"goal": "x"}, pmid="12345678")
+
+    with pytest.raises(ValidationError, match="Provide either pmid or source_title, not both"):
+        GenerateFigureRequest(pmid="12345678", source_title="Repo brief")
+
+
+def test_generate_figure_composite_manifest_uses_final_output_path(tmp_path: Path) -> None:
+    generator = StubGenerator()
+    prompt_builder = StubPromptBuilder()
+    manifest_store = StubManifestStore()
+    composer = StubComposer(tmp_path)
+    use_case = GenerateFigureUseCase(
+        fetcher=FailFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        output_dir=str(tmp_path),
+        manifest_store=manifest_store,
+        composer=composer,
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    payload = {
+        "asset_kind": "academic_figure",
+        "title": "Composite Assembly",
+        "selected_figure_type": "infographic",
+        "render_route": "composite_figure",
+        "panels": [
+            {"image_path": str(tmp_path / "panel-a.png"), "label": "A", "panel_type": "chart"},
+            {"image_path": str(tmp_path / "panel-b.png"), "label": "B", "panel_type": "anatomy"},
+        ],
+    }
+
+    result = use_case.execute(
+        GenerateFigureRequest(
+            planned_payload=payload,
+            output_format="jpeg",
+            output_dir=str(tmp_path),
+        )
+    )
+
+    manifest = manifest_store.saved[0]
+    assert result["status"] == "ok"
+    assert str(manifest.output_path).endswith(".jpg")
+    assert manifest.output_path == result["output_path"]

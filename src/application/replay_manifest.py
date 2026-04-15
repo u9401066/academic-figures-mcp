@@ -8,11 +8,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from src.application.review_harness import (
+    append_review_history,
+    build_provider_review_entry,
+    build_review_summary,
+    run_quality_gate,
+)
 from src.domain.entities import GenerationManifest
 
 if TYPE_CHECKING:
     from src.domain.entities import GenerationResult
-    from src.domain.interfaces import ImageGenerator, ManifestStore
+    from src.domain.interfaces import ImageGenerator, ImageVerifier, ManifestStore
 
 
 @dataclass
@@ -26,10 +32,12 @@ class ReplayManifestUseCase:
         self,
         manifest_store: ManifestStore,
         generator: ImageGenerator,
+        verifier: ImageVerifier | None = None,
         default_output_dir: str = ".academic-figures/outputs",
     ) -> None:
         self._manifest_store = manifest_store
         self._generator = generator
+        self._verifier = verifier
         self._output_dir = default_output_dir
 
     def execute(self, req: ReplayManifestRequest) -> dict[str, Any]:
@@ -50,12 +58,33 @@ class ReplayManifestUseCase:
             figure_type=manifest.figure_type,
             extension=result.file_extension,
         )
+        warnings = list(manifest.warnings)
+        expected_labels = _expected_labels_from_payload(manifest.planned_payload)
+        quality_gate = run_quality_gate(
+            self._verifier,
+            result.image_bytes,
+            expected_labels=expected_labels,
+            figure_type=manifest.figure_type,
+            language=manifest.language,
+            warnings=warnings,
+        )
+        review_summary = build_review_summary(
+            quality_gate=quality_gate,
+            provider_route_available=self._verifier is not None,
+        )
+        review_history = append_review_history(
+            [],
+            build_provider_review_entry(quality_gate, source="replay_manifest"),
+        )
         result.save(out_path)
         replay_manifest = self._build_manifest(
             parent=manifest,
             output_path=out_path,
             model=result.model,
-            warnings=manifest.warnings,
+            quality_gate=quality_gate,
+            review_summary=review_summary,
+            review_history=review_history,
+            warnings=warnings,
         )
         self._manifest_store.save(replay_manifest)
 
@@ -71,6 +100,10 @@ class ReplayManifestUseCase:
             "prompt_length": len(manifest.prompt),
             "model": result.model,
             "generation_contract": "manifest_replay",
+            "quality_gate": quality_gate,
+            "review_summary": review_summary,
+            "review_history": review_history,
+            "warnings": warnings,
         }
 
     def _write_output(
@@ -93,6 +126,9 @@ class ReplayManifestUseCase:
         parent: GenerationManifest,
         output_path: Path,
         model: str,
+        quality_gate: dict[str, object] | None,
+        review_summary: dict[str, object],
+        review_history: list[dict[str, object]],
         warnings: list[str],
     ) -> GenerationManifest:
         return GenerationManifest(
@@ -113,6 +149,9 @@ class ReplayManifestUseCase:
             model=model,
             provider=parent.provider,
             generation_contract="manifest_replay",
+            quality_gate=quality_gate,
+            review_summary=review_summary,
+            review_history=[dict(item) for item in review_history],
             parent_manifest_id=parent.manifest_id,
             warnings=warnings,
         )
@@ -122,3 +161,10 @@ class ReplayManifestUseCase:
         cleaned = "".join(ch.lower() if ch.isalnum() else "_" for ch in value)
         cleaned = "_".join(part for part in cleaned.split("_") if part)
         return cleaned or "asset"
+
+
+def _expected_labels_from_payload(payload: dict[str, Any]) -> list[str]:
+    raw = payload.get("expected_labels")
+    if not isinstance(raw, list):
+        return []
+    return [str(item).strip() for item in raw if str(item).strip()]

@@ -16,9 +16,13 @@ def test_inventory_lists_all_registered_tools() -> None:
         "evaluate_figure",
         "batch_generate",
         "composite_figure",
+        "get_manifest_detail",
+        "record_host_review",
+        "verify_figure",
+        "multi_turn_edit",
+        "list_manifests",
         "replay_manifest",
         "retarget_journal",
-        "list_manifests",
     }
     inventory = json.loads(inventory_resource())
     actual_tools = set(inventory["tools"])

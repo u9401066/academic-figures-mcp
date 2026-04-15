@@ -9,9 +9,11 @@ from src.application.composite_figure import CompositeFigureUseCase
 from src.application.edit_figure import EditFigureUseCase
 from src.application.evaluate_figure import EvaluateFigureUseCase
 from src.application.generate_figure import GenerateFigureUseCase
+from src.application.get_manifest_detail import GetManifestDetailUseCase
 from src.application.list_manifests import ListManifestsUseCase
 from src.application.multi_turn_edit import MultiTurnEditUseCase
 from src.application.plan_figure import PlanFigureUseCase
+from src.application.record_host_review import RecordHostReviewUseCase
 from src.application.replay_manifest import ReplayManifestUseCase
 from src.application.retarget_journal import RetargetJournalUseCase
 from src.application.verify_figure import VerifyFigureUseCase
@@ -21,6 +23,7 @@ from src.infrastructure.config import load_config
 from src.infrastructure.file_metadata_fetcher import FileMetadataFetcher
 from src.infrastructure.gemini_adapter import GeminiAdapter, GeminiImageVerifier
 from src.infrastructure.manifest_store import FileManifestStore
+from src.infrastructure.output_formatter import PillowOutputFormatter
 from src.infrastructure.prompt_engine import PromptEngine
 from src.infrastructure.pubmed_client import PubMedClient
 
@@ -31,6 +34,7 @@ if TYPE_CHECKING:
         ImageVerifier,
         ManifestStore,
         MetadataFetcher,
+        OutputFormatter,
         PromptBuilder,
     )
 
@@ -48,6 +52,7 @@ class Container:
         self._manifest_store: FileManifestStore | None = None
         self._composer: CompositeFigureAssembler | None = None
         self._verifier: ImageVerifier | None = None
+        self._output_formatter: OutputFormatter | None = None
 
     @classmethod
     def get(cls) -> Container:
@@ -113,6 +118,12 @@ class Container:
             self._verifier = GeminiImageVerifier(self._config.gemini)
         return self._verifier
 
+    @property
+    def output_formatter(self) -> OutputFormatter:
+        if self._output_formatter is None:
+            self._output_formatter = PillowOutputFormatter()
+        return self._output_formatter
+
     # ── Use case factories ──────────────────────────────────
 
     def generate_figure_uc(self) -> GenerateFigureUseCase:
@@ -125,6 +136,7 @@ class Container:
             manifest_store=self.manifest_store,
             composer=self.composer,
             verifier=self.verifier,
+            output_formatter=self.output_formatter,
         )
 
     def plan_figure_uc(self) -> PlanFigureUseCase:
@@ -135,7 +147,10 @@ class Container:
         )
 
     def edit_figure_uc(self) -> EditFigureUseCase:
-        return EditFigureUseCase(generator=self.generator)
+        return EditFigureUseCase(
+            generator=self.generator,
+            output_formatter=self.output_formatter,
+        )
 
     def evaluate_figure_uc(self) -> EvaluateFigureUseCase:
         return EvaluateFigureUseCase(generator=self.generator)
@@ -150,14 +165,22 @@ class Container:
         return ReplayManifestUseCase(
             manifest_store=self.manifest_store,
             generator=self.generator,
+            verifier=self.verifier,
             default_output_dir=self.output_dir,
         )
+
+    def record_host_review_uc(self) -> RecordHostReviewUseCase:
+        return RecordHostReviewUseCase(manifest_store=self.manifest_store)
+
+    def get_manifest_detail_uc(self) -> GetManifestDetailUseCase:
+        return GetManifestDetailUseCase(manifest_store=self.manifest_store)
 
     def retarget_journal_uc(self) -> RetargetJournalUseCase:
         return RetargetJournalUseCase(
             manifest_store=self.manifest_store,
             generator=self.generator,
             prompt_builder=self.prompt_builder,
+            verifier=self.verifier,
             default_output_dir=self.output_dir,
             provider_name=self._config.gemini.provider,
         )

@@ -26,6 +26,8 @@ class Paper:
     journal: str = ""
     pubdate: str = ""
     abstract: str = ""
+    source_kind: str = "paper"
+    source_identifier: str | None = None
 
 
 @dataclass
@@ -84,6 +86,9 @@ class GenerationManifest:
     model: str
     provider: str
     generation_contract: str
+    quality_gate: dict[str, Any] | None = None
+    review_summary: dict[str, Any] | None = None
+    review_history: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     parent_manifest_id: str | None = None
     warnings: list[str] = field(default_factory=list)
@@ -107,6 +112,9 @@ class GenerationManifest:
             "model": self.model,
             "provider": self.provider,
             "generation_contract": self.generation_contract,
+            "quality_gate": dict(self.quality_gate) if self.quality_gate else None,
+            "review_summary": dict(self.review_summary) if self.review_summary else None,
+            "review_history": [dict(item) for item in self.review_history],
             "created_at": self.created_at.isoformat(),
             "parent_manifest_id": self.parent_manifest_id,
             "warnings": list(self.warnings),
@@ -123,6 +131,9 @@ class GenerationManifest:
         journal_profile = data.get("journal_profile")
         source_context = data.get("source_context") or {}
         planned_payload = data.get("planned_payload") or {}
+        quality_gate = data.get("quality_gate")
+        review_summary = data.get("review_summary")
+        review_history = data.get("review_history") or []
         warnings = data.get("warnings") or []
         return cls(
             manifest_id=str(data.get("manifest_id") or ""),
@@ -144,6 +155,13 @@ class GenerationManifest:
             model=str(data.get("model") or ""),
             provider=str(data.get("provider") or ""),
             generation_contract=str(data.get("generation_contract") or "planned_payload"),
+            quality_gate=dict(quality_gate) if isinstance(quality_gate, dict) else None,
+            review_summary=(
+                dict(review_summary) if isinstance(review_summary, dict) else None
+            ),
+            review_history=[
+                dict(item) for item in review_history if isinstance(item, dict)
+            ],
             created_at=created_at,
             parent_manifest_id=(
                 str(data["parent_manifest_id"]).strip() if data.get("parent_manifest_id") else None

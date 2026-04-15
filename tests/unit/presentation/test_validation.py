@@ -5,15 +5,24 @@ import pytest
 from src.domain.exceptions import ValidationError
 from src.presentation.validation import (
     normalize_list_limit,
+    normalize_output_format,
     normalize_output_size,
+    normalize_plan_source,
     normalize_planned_payload,
     normalize_pmids,
+    normalize_source_kind,
+    normalize_source_title,
     normalize_target_journal,
 )
 
 
 def test_normalize_output_size_returns_canonical_format() -> None:
     assert normalize_output_size(" 1024X1536 ") == "1024x1536"
+
+
+def test_normalize_output_format_returns_canonical_format() -> None:
+    assert normalize_output_format(" JPG ") == "jpeg"
+    assert normalize_output_format(" gif ") == "gif"
 
 
 @pytest.mark.parametrize(
@@ -38,6 +47,42 @@ def test_normalize_pmids_rejects_oversized_batches() -> None:
 
     with pytest.raises(ValidationError, match="cannot contain more than 25 items"):
         normalize_pmids(oversized)
+
+
+def test_normalize_plan_source_accepts_pmid_or_source_title() -> None:
+    assert normalize_plan_source(pmid="12345678", source_title=None) == ("12345678", None)
+    assert normalize_plan_source(pmid=None, source_title="Repo brief") == (None, "Repo brief")
+
+
+@pytest.mark.parametrize(
+    ("pmid", "source_title", "message"),
+    [
+        (None, None, "Provide either pmid or source_title"),
+        ("12345678", "Repo brief", "Provide either pmid or source_title, not both"),
+    ],
+)
+def test_normalize_plan_source_rejects_invalid_combinations(
+    pmid: str | None,
+    source_title: str | None,
+    message: str,
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        normalize_plan_source(pmid=pmid, source_title=source_title)
+
+
+def test_normalize_source_title_rejects_blank_values() -> None:
+    with pytest.raises(ValidationError, match="cannot be blank"):
+        normalize_source_title("   ")
+
+
+def test_normalize_source_kind_rejects_unknown_values() -> None:
+    with pytest.raises(ValidationError, match="source_kind must be one of"):
+        normalize_source_kind("dataset")
+
+
+def test_normalize_output_format_rejects_unknown_values() -> None:
+    with pytest.raises(ValidationError, match="output_format must be one of"):
+        normalize_output_format("bmp")
 
 
 @pytest.mark.parametrize(

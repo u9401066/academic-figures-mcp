@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from src.domain.exceptions import ImageNotFoundError
 
 if TYPE_CHECKING:
-    from src.domain.interfaces import ImageGenerator
+    from src.domain.interfaces import ImageGenerator, OutputFormatter
 
 
 @dataclass
@@ -17,11 +17,17 @@ class EditFigureRequest:
     image_path: str
     feedback: str
     output_path: str | None = None
+    output_format: str | None = None
 
 
 class EditFigureUseCase:
-    def __init__(self, generator: ImageGenerator) -> None:
+    def __init__(
+        self,
+        generator: ImageGenerator,
+        output_formatter: OutputFormatter | None = None,
+    ) -> None:
         self._generator = generator
+        self._output_formatter = output_formatter
 
     def execute(self, req: EditFigureRequest) -> dict[str, object]:
         img = Path(req.image_path)
@@ -38,6 +44,9 @@ class EditFigureUseCase:
                 "elapsed_seconds": result.elapsed_seconds,
             }
 
+        if self._output_formatter is not None:
+            result = self._output_formatter.convert_generation_result(result, req.output_format)
+
         save_to = self._resolve_output_path(
             source_path=img,
             requested_output_path=req.output_path,
@@ -49,6 +58,8 @@ class EditFigureUseCase:
             "status": "ok",
             "image_path": str(img),
             "output_path": str(save_to),
+            "output_format": req.output_format,
+            "media_type": result.media_type,
             "model": result.model,
             "image_size_bytes": len(result.image_bytes) if result.image_bytes else 0,
             "elapsed_seconds": result.elapsed_seconds,

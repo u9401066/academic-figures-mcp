@@ -8,7 +8,7 @@
 
 **A multi-step academic figure agent harness for AI agents and non-engineers.**
 
-Academic Figures MCP is a workflow harness for multi-step academic reasoning and figure production. PMID ingestion is one structured entry point, but the real product value is helping an agent move through academic planning, concept decomposition, figure-type selection, prompt orchestration, image generation, evaluation, and iteration until it reaches a publication-grade result. MCP exposure and VSX packaging make that workflow usable without requiring engineering-heavy setup.
+Academic Figures MCP is a workflow harness for multi-step academic reasoning and figure production. PMID ingestion is one structured entry point, but the real product value is helping an agent move through academic planning, concept decomposition, figure-type selection, prompt orchestration, image generation, evaluation, and iteration until it reaches a publication-grade result. Preprints, repositories, and freeform briefs are also first-class planning inputs. MCP exposure and VSX packaging make that workflow usable without requiring engineering-heavy setup.
 
 ## One-Click Install (VS Code)
 
@@ -43,7 +43,7 @@ It now includes a YAML-backed journal registry so the MCP layer can inject figur
 
 This server targets the modern MCP Python SDK line and is intended to expose:
 
-- 11 MCP tools for planning, generation, editing, evaluation, replay, retargeting, verification, and multi-step refinement workflows
+- 13 MCP tools for planning, generation, editing, evaluation, review write-back, manifest inspection, replay, retargeting, verification, and multi-step refinement workflows
 - resources for discovery of presets, templates, and Gemini image defaults
 - reusable prompts for figure planning and style transformation
 
@@ -55,30 +55,36 @@ The system is designed as a multi-step academic workflow:
 2. Reason about the scientific concept, communication goal, and target figure type.
 3. Organize the request into a structured plan using academic constraints and journal conventions.
 4. Generate the figure through the provider layer.
-5. Evaluate the result against academic-quality criteria.
-6. Iterate until the output is publication-grade.
+5. Run provider-side automated review and persist the manifest.
+6. Optionally add host-side visual review back into the same manifest.
+7. Iterate until the output is publication-grade.
 
 ## MCP Tools
 
 | Tool | Input | Output |
 | ---- | ----- | ------ |
-| `plan_figure` | `pmid`, `figure_type?`, `style_preset?` | Structured plan with route, constraints, and next-step arguments |
-| `generate_figure` | `planned_payload` or compatibility `pmid` bridge | Generated asset from a generic render request (now respects `render_route=composite_figure`) |
-| `edit_figure` | `image_path`, `feedback` | Refined image via Gemini edit API |
+| `plan_figure` | `pmid` or `source_title`, plus `source_kind?`, `source_summary?`, `source_identifier?`, `output_format?`, `figure_type?`, `style_preset?` | Structured plan with route, constraints, and next-step arguments |
+| `generate_figure` | `planned_payload` or a direct source input (`pmid` / `source_title`), plus `output_format?` | Single high-level draw entrypoint with optional internal planning and raster format conversion |
+| `edit_figure` | `image_path`, `feedback`, `output_format?` | Refined image via Gemini edit API with optional internal raster format conversion |
 | `evaluate_figure` | `image_path`, `figure_type?` | 8-domain scorecard with suggestions |
 | `batch_generate` | `pmids: list`, `figure_type?` | Batch generation results |
 | `composite_figure` | `panels`, `labels`, `title`, `caption?`, `citation?` | Publication-ready multi-panel montage with labels and DPI metadata |
 | `list_manifests` | `limit?` | Recent manifest metadata for replay or retargeting |
+| `get_manifest_detail` | `manifest_id`, `include_lineage?` | Full manifest payload, lineage chain, and flattened review timeline |
 | `replay_manifest` | `manifest_id`, `output_dir?` | Re-run a saved manifest using the original prompt and provider |
+| `record_host_review` | `manifest_id`, `passed`, `summary`, `critical_issues?`, `reviewer?` | Persist a Copilot or host-side visual verdict back into the review harness |
 | `retarget_journal` | `manifest_id`, `target_journal`, `output_dir?` | Regenerate with a new journal profile plus before/after diff |
 | `verify_figure` | `image_path`, `expected_labels?`, `figure_type?`, `language?` | Standalone quality-gate verdict with domain scores and exact-label verification |
 | `multi_turn_edit` | `image_path`, `instructions[]`, `max_turns?` | Iterative edit session for progressive refinement without restarting from scratch |
 
-`generate_figure` is now internally plan-first. If you pass a PMID directly, the server first builds a planning payload and then renders from that payload. The canonical contract remains `plan_figure` followed by `generate_figure(planned_payload=...)`.
+`generate_figure` is now the default high-level entrypoint. You can pass a PMID, a non-PMID source brief such as a preprint or repository summary, or a fully prepared `planned_payload`. When the request starts from source inputs, the server plans internally first and then renders. `plan_figure` remains available when a host explicitly wants to inspect or edit the plan before drawing.
+
+If you want a specific delivered file type, pass `output_format` such as `png`, `gif`, `jpeg`, or `webp`. MCP now performs raster-format conversion internally after generation or editing. SVG stays pass-through only; it is not rasterized automatically.
 
 ### Reproducibility & Retargeting
 
 - Every successful generation now writes a manifest to `.academic-figures/manifests` (override with `AFM_MANIFEST_DIR`).
+- `list_manifests` remains the summary surface; `get_manifest_detail` loads the full manifest body plus lineage-aware review history.
 - `list_manifests` + `replay_manifest` let you rerun saved prompts without rebuilding the plan.
 - `retarget_journal` injects a new journal profile, regenerates, and returns a before/after diff of the profile metadata.
 
@@ -91,8 +97,13 @@ The system is designed as a multi-step academic workflow:
 
 - `plan_figure` now accepts `expected_labels` so exact text strings can be propagated into prompt construction and later verification.
 - Text-heavy CJK requests can be escalated toward higher-fidelity model selection and SVG-oriented routes automatically.
-- `generate_figure` can return a `quality_gate` block with domain scores, missing labels, and a pass/fail verdict.
-- `verify_figure` lets you run the same quality gate independently against any generated image.
+- `generate_figure`, `replay_manifest`, and `retarget_journal` automatically run provider-side review when a verifier is configured, and they persist `quality_gate`, `review_summary`, and `review_history` into the manifest.
+- `verify_figure` lets you run the same provider-side quality gate independently against any generated image.
+- `record_host_review` is the write-back path for Copilot or another host model after it inspects the image externally.
+- The dual-route review contract accepts `provider_vision` and `host_vision`, but the persisted policy is now `provider_vision_required_host_optional`.
+- `provider_vision` is the baseline gate: it must run and pass for `requirement_met=true`.
+- `host_vision` is supplemental: it can add a second pass or extra critique, but it cannot replace a failed or missing provider baseline.
+- `get_manifest_detail` returns the full review history so a host can inspect the current verdict, all recorded review events, and lineage context without rereading raw JSON files.
 - `multi_turn_edit` keeps an edit session alive across multiple instructions, which is useful when fixing garbled labels or layout issues iteratively.
 
 ## Product Positioning
@@ -260,6 +271,7 @@ Run the first figure directly through `afm-run`:
 
 ```bash
 uv run python scripts/start_afm_local.py run generate --pmid 41657234 --language zh-TW --output-size 1024x1536
+uv run python scripts/start_afm_local.py run generate --pmid 41657234 --output-format webp
 ```
 
 This direct `--pmid` path is a compatibility bridge. It now performs the planning step internally before rendering.
@@ -269,6 +281,12 @@ Inject a journal profile explicitly when you want the planner and renderer to en
 ```bash
 uv run python scripts/start_afm_local.py run plan --pmid 41657234 --target-journal Nature
 uv run python scripts/start_afm_local.py run generate --pmid 41657234 --target-journal JAMA
+```
+
+Plan directly from a non-PMID source such as a repository or preprint brief:
+
+```bash
+uv run python scripts/start_afm_local.py run plan --source-title "HyperHierarchicalRAG repository overview" --source-kind repo --source-identifier github.com/zzstoatzz/hyperhierarchicalrag --source-summary "Explain the repository architecture, agent workflow, and retrieval hierarchy."
 ```
 
 Run generic asset generation through the same public tool using a JSON payload file:
@@ -281,6 +299,8 @@ The same wrapper also supports direct planning and evaluation:
 
 ```bash
 uv run python scripts/start_afm_local.py run plan --pmid 41657234
+uv run python scripts/start_afm_local.py run plan --pmid 41657234 --output-format jpeg
+uv run python scripts/start_afm_local.py run plan --source-title "Acute stroke treatment preprint" --source-kind preprint --source-identifier arXiv:2504.01234 --source-summary "Summarize the proposed intervention workflow and outcome framing."
 uv run python scripts/start_afm_local.py run evaluate --image-path .academic-figures/outputs/your-file.png
 ```
 
@@ -303,6 +323,8 @@ Then just ask:
 - "Help me plan the right academic figure structure for PMID 41657234 before generating it"
 - "幫我做 PMID 41657234 的 consensus flowchart"
 - "What figure type should I use for PMID 34567890?"
+- "Plan a repository overview figure for https://github.com/zzstoatzz/HyperHierarchicalRAG"
+- "Turn this preprint abstract into a publication-grade mechanism figure plan"
 - "Help me turn this academic concept into a publication-grade figure plan"
 
 The VS Code extension can now run plan, generate, transform, and evaluate commands directly through `afm-run` instead of copying prompts into chat.

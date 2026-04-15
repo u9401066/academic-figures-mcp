@@ -46,11 +46,12 @@ class PromptEngine(PromptBuilder):
         output_size: str,
         expected_labels: list[str] | None = None,
     ) -> str:
+        source_descriptor = self._describe_source(paper)
         block1 = (
             f"## Block 1: TITLE & PURPOSE\n"
             f"title: '{paper.title}'\n"
-            f"purpose: Academic medical figure visualizing key findings "
-            f"from PMID {paper.pmid}"
+            f"purpose: Publication-ready figure visualizing key findings "
+            f"from {source_descriptor}"
         )
         block2 = self._get_layout(figure_type)
         block3 = (
@@ -60,12 +61,15 @@ class PromptEngine(PromptBuilder):
         )
         block4 = self._get_color_scheme(figure_type)
         lang_text = f"Traditional Chinese ({language})" if language == "zh-TW" else language
-        block5 = (
-            f"## Block 5: TEXT\n"
-            f"language: {lang_text}\n"
-            f"citation: '{paper.authors} · {paper.journal}'\n"
-            f"pmid: PMID {paper.pmid}"
-        )
+        citation = self._format_citation(paper)
+        block5_lines = [
+            "## Block 5: TEXT",
+            f"language: {lang_text}",
+        ]
+        if citation:
+            block5_lines.append(f"citation: '{citation}'")
+        block5_lines.append(self._format_source_line(paper))
+        block5 = "\n".join(block5_lines)
         block6 = self._get_style(figure_type)
         block7 = f"## Block 7: SIZE\ncanvas: {output_size}"
 
@@ -80,6 +84,43 @@ class PromptEngine(PromptBuilder):
             blocks.append(cjk_block)
 
         return "\n\n".join(blocks)
+
+    @staticmethod
+    def _describe_source(paper: Paper) -> str:
+        if paper.pmid:
+            return f"PMID {paper.pmid}"
+        label = PromptEngine._source_kind_label(paper.source_kind)
+        if paper.source_identifier:
+            return f"{label} {paper.source_identifier}"
+        return f"the provided {label.lower()} brief"
+
+    @staticmethod
+    def _format_citation(paper: Paper) -> str:
+        citation = " · ".join(part for part in (paper.authors, paper.journal) if part)
+        if citation:
+            return citation
+        if paper.source_identifier:
+            source_label = PromptEngine._source_kind_label(paper.source_kind)
+            return f"{source_label} · {paper.source_identifier}"
+        return PromptEngine._source_kind_label(paper.source_kind)
+
+    @staticmethod
+    def _format_source_line(paper: Paper) -> str:
+        if paper.pmid:
+            return f"pmid: PMID {paper.pmid}"
+        if paper.source_identifier:
+            source_label = PromptEngine._source_kind_label(paper.source_kind)
+            return f"source: {source_label} {paper.source_identifier}"
+        return f"source: provided {paper.source_kind} brief"
+
+    @staticmethod
+    def _source_kind_label(source_kind: str) -> str:
+        return {
+            "paper": "Paper",
+            "preprint": "Preprint",
+            "repo": "Repository",
+            "brief": "Brief",
+        }.get(source_kind, source_kind.replace("_", " ").title())
 
     def inject_journal_requirements(
         self,

@@ -11,7 +11,14 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from src.application.plan_figure import PlanFigureRequest, PlanFigureUseCase
+from src.application.review_harness import (
+    append_review_history,
+    build_provider_review_entry,
+    build_review_summary,
+    run_quality_gate,
+)
 from src.domain.entities import GenerationManifest
+from src.domain.exceptions import ValidationError
 
 if TYPE_CHECKING:
     from src.domain.entities import GenerationResult
@@ -21,25 +28,58 @@ if TYPE_CHECKING:
         ImageVerifier,
         ManifestStore,
         MetadataFetcher,
+        OutputFormatter,
         PromptBuilder,
     )
-
-
-PMID_COMPATIBILITY_WARNING = (
-    "PMID input used the internal plan-first compatibility bridge. "
-    "Prefer plan_figure followed by generate_figure(planned_payload)."
-)
 
 
 @dataclass
 class GenerateFigureRequest:
     pmid: str | None = None
+    source_title: str | None = None
+    source_summary: str | None = None
+    source_kind: str = "paper"
+    source_identifier: str | None = None
     planned_payload: dict[str, Any] | None = None
     figure_type: str = "auto"
     language: str = "zh-TW"
     output_size: str = "1024x1536"
+    output_format: str | None = None
     output_dir: str | None = None
     target_journal: str | None = None
+
+    def __post_init__(self) -> None:
+        self.pmid = _clean_optional_text(self.pmid)
+        self.source_title = _clean_optional_text(self.source_title)
+        self.source_summary = _clean_optional_text(self.source_summary)
+        self.source_identifier = _clean_optional_text(self.source_identifier)
+        self.output_format = _clean_optional_text(self.output_format)
+
+        if self.planned_payload is not None:
+            if not isinstance(self.planned_payload, dict) or not self.planned_payload:
+                raise ValidationError("planned_payload cannot be empty")
+            if (
+                self.pmid is not None
+                or self.source_title is not None
+                or self.source_summary is not None
+                or self.source_identifier is not None
+                or self.source_kind != "paper"
+            ):
+                raise ValidationError(
+                    "Provide either planned_payload or source inputs, not both"
+                )
+            return
+
+        if self.pmid is None and self.source_title is None:
+            raise ValidationError("Provide either pmid or source_title")
+        if self.pmid is not None and self.source_title is not None:
+            raise ValidationError("Provide either pmid or source_title, not both")
+        if self.pmid is not None and (
+            self.source_summary is not None
+            or self.source_identifier is not None
+            or self.source_kind != "paper"
+        ):
+            raise ValidationError("source_* fields are only supported when pmid is omitted")
 
 
 class GenerateFigureUseCase:
@@ -53,6 +93,7 @@ class GenerateFigureUseCase:
         manifest_store: ManifestStore | None = None,
         composer: FigureComposer | None = None,
         verifier: ImageVerifier | None = None,
+        output_formatter: OutputFormatter | None = None,
     ) -> None:
         self._fetcher = fetcher
         self._generator = generator
@@ -62,19 +103,15 @@ class GenerateFigureUseCase:
         self._manifest_store = manifest_store
         self._composer = composer
         self._verifier = verifier
+        self._output_formatter = output_formatter
 
     def execute(self, req: GenerateFigureRequest) -> dict[str, object]:
         if req.planned_payload is not None:
             return self._execute_planned_payload(req)
-        if req.pmid is None:
-            return {
-                "status": "error",
-                "error": "Either pmid or planned_payload is required",
-            }
 
-        return self._execute_pmid_compatibility_bridge(req)
+        return self._execute_plan_first_bridge(req)
 
-    def _execute_pmid_compatibility_bridge(
+    def _execute_plan_first_bridge(
         self,
         req: GenerateFigureRequest,
     ) -> dict[str, object]:
@@ -85,7 +122,12 @@ class GenerateFigureUseCase:
         )
         plan_result = planner.execute(
             PlanFigureRequest(
-                pmid=req.pmid or "",
+                pmid=req.pmid,
+                source_title=req.source_title,
+                source_summary=req.source_summary,
+                source_kind=req.source_kind,
+                source_identifier=req.source_identifier,
+                output_format=req.output_format,
                 figure_type=req.figure_type,
                 language=req.language,
                 output_size=req.output_size,
@@ -106,6 +148,7 @@ class GenerateFigureUseCase:
                 figure_type=req.figure_type,
                 language=req.language,
                 output_size=req.output_size,
+                output_format=req.output_format,
                 output_dir=req.output_dir,
                 target_journal=req.target_journal,
             )
@@ -114,6 +157,10 @@ class GenerateFigureUseCase:
         bridged_result.update(
             {
                 "pmid": plan_result.get("pmid", req.pmid),
+                "source_kind": plan_result.get("source_kind", req.source_kind),
+                "source_identifier": plan_result.get(
+                    "source_identifier", req.source_identifier
+                ),
                 "title": plan_result.get("title", generated_result.get("title")),
                 "journal": plan_result.get("journal"),
                 "figure_type": plan_result.get(
@@ -122,11 +169,10 @@ class GenerateFigureUseCase:
                 ),
                 "template": plan_result.get("template"),
                 "render_route_reason": plan_result.get("render_route_reason"),
-                "generation_contract": "pmid_compatibility_bridge",
+                "generation_contract": "single_entry_plan_first",
                 "warnings": self._merge_warnings(
                     plan_result.get("warnings"),
                     generated_result.get("warnings"),
-                    [PMID_COMPATIBILITY_WARNING],
                 ),
             }
         )
@@ -163,12 +209,16 @@ class GenerateFigureUseCase:
 
         language = self._as_text(payload.get("language")) or req.language
         output_size = self._as_text(payload.get("output_size")) or req.output_size
+        output_format = self._normalize_output_format(
+            req.output_format or self._as_text(payload.get("output_format"))
+        )
         title = self._resolve_title(payload=payload, asset_kind=asset_kind)
         source_context_dict = self._as_dict(payload.get("source_context")) or {}
         payload_target_journal = self._as_text(payload.get("target_journal"))
         target_journal = req.target_journal or payload_target_journal
         source_journal = self._as_text(source_context_dict.get("journal"))
         payload_journal_profile = self._as_dict(payload.get("journal_profile"))
+        journal_profile_checked = bool(payload.get("journal_profile_checked"))
 
         composite_result = self._execute_composite_payload(
             payload=payload,
@@ -182,6 +232,7 @@ class GenerateFigureUseCase:
             target_journal=target_journal,
             warnings=warnings,
             output_dir=req.output_dir,
+            output_format=output_format,
             start=start,
         )
         if composite_result is not None:
@@ -195,7 +246,7 @@ class GenerateFigureUseCase:
             language=language,
             output_size=output_size,
         )
-        should_inject_journal = payload_journal_profile is None or (
+        should_inject_journal = (not journal_profile_checked) or (
             req.target_journal is not None and req.target_journal != payload_target_journal
         )
         journal_profile = payload_journal_profile
@@ -233,6 +284,8 @@ class GenerateFigureUseCase:
                 "warnings": warnings,
             }
 
+        result = self._convert_generation_result(result, output_format)
+
         out_dir = Path(req.output_dir or self._output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         ts = int(time.time())
@@ -241,6 +294,23 @@ class GenerateFigureUseCase:
         )
         out_path = out_dir / f"{stem}_{figure_type}_{ts}{result.file_extension}"
         result.save(out_path)
+        expected_labels = self._as_text_list(payload.get("expected_labels"))
+        quality_gate = run_quality_gate(
+            self._verifier,
+            result.image_bytes,
+            expected_labels=expected_labels,
+            figure_type=figure_type,
+            language=language,
+            warnings=warnings,
+        )
+        review_summary = build_review_summary(
+            quality_gate=quality_gate,
+            provider_route_available=self._verifier is not None,
+        )
+        review_history = append_review_history(
+            [],
+            build_provider_review_entry(quality_gate, source="generate_figure"),
+        )
         manifest_id = self._persist_manifest(
             payload=payload,
             prompt=prompt,
@@ -256,37 +326,11 @@ class GenerateFigureUseCase:
             source_context=source_context_dict,
             output_path=str(out_path),
             model=result.model,
+            quality_gate=quality_gate,
+            review_summary=review_summary,
+            review_history=review_history,
             warnings=warnings,
         )
-
-        # ── Post-generation quality gate (self-review) ──────
-        quality_gate: dict[str, object] | None = None
-        expected_labels = self._as_text_list(payload.get("expected_labels"))
-        if self._verifier is not None and result.image_bytes:
-            try:
-                verdict = self._verifier.verify(
-                    result.image_bytes,
-                    expected_labels=expected_labels,
-                    figure_type=figure_type,
-                    language=language,
-                )
-                quality_gate = {
-                    "passed": verdict.passed,
-                    "total_score": verdict.total_score,
-                    "domain_scores": verdict.domain_scores,
-                    "critical_issues": list(verdict.critical_issues),
-                    "text_verification_passed": verdict.text_verification_passed,
-                    "missing_labels": list(verdict.missing_labels),
-                    "summary": verdict.summary,
-                }
-                if not verdict.passed:
-                    warnings.append(
-                        "Quality gate FAILED — consider using edit_figure to fix issues."
-                    )
-                if verdict.missing_labels:
-                    warnings.append(f"Missing/garbled labels: {', '.join(verdict.missing_labels)}")
-            except Exception:
-                quality_gate = {"passed": None, "error": "Quality gate check failed"}
 
         return {
             "status": "ok",
@@ -301,6 +345,7 @@ class GenerateFigureUseCase:
             "source_context": source_context_dict,
             "model": result.model,
             "output_path": str(out_path),
+            "output_format": output_format,
             "media_type": result.media_type,
             "image_size_bytes": len(result.image_bytes) if result.image_bytes else 0,
             "prompt_blocks": 7,
@@ -310,6 +355,8 @@ class GenerateFigureUseCase:
             "warnings": warnings,
             "manifest_id": manifest_id,
             "quality_gate": quality_gate,
+            "review_summary": review_summary,
+            "review_history": review_history,
         }
 
     def _execute_composite_payload(
@@ -326,6 +373,7 @@ class GenerateFigureUseCase:
         target_journal: str | None,
         warnings: list[str],
         output_dir: str | None,
+        output_format: str | None,
         start: float,
     ) -> dict[str, object] | None:
         if not self._is_composite_payload(payload, requested_render_route):
@@ -382,6 +430,29 @@ class GenerateFigureUseCase:
             language=language,
             output_size=output_size,
         )
+        final_output_path = Path(str(compose_result.get("output_path") or out_path))
+        final_output_path = self._convert_file(final_output_path, output_format)
+        output_path = str(final_output_path)
+        image_size = Path(output_path).stat().st_size if Path(output_path).exists() else 0
+        media_type = self._media_type_for_output_format(output_format) or "image/png"
+        expected_labels = self._as_text_list(payload.get("expected_labels"))
+        image_bytes = final_output_path.read_bytes() if final_output_path.exists() else None
+        quality_gate = run_quality_gate(
+            self._verifier,
+            image_bytes,
+            expected_labels=expected_labels,
+            figure_type=figure_type,
+            language=language,
+            warnings=warnings,
+        )
+        review_summary = build_review_summary(
+            quality_gate=quality_gate,
+            provider_route_available=self._verifier is not None,
+        )
+        review_history = append_review_history(
+            [],
+            build_provider_review_entry(quality_gate, source="generate_figure"),
+        )
         manifest_id = self._persist_manifest(
             payload=payload,
             prompt=manifest_prompt,
@@ -395,13 +466,13 @@ class GenerateFigureUseCase:
             target_journal=target_journal,
             journal_profile=None,
             source_context=source_context,
-            output_path=str(out_path),
+            output_path=output_path,
             model="composite-assembler",
+            quality_gate=quality_gate,
+            review_summary=review_summary,
+            review_history=review_history,
             warnings=warnings,
         )
-
-        output_path = str(compose_result.get("output_path") or out_path)
-        image_size = Path(output_path).stat().st_size if Path(output_path).exists() else 0
         return {
             "status": "ok",
             "generation_contract": "composite_render",
@@ -415,13 +486,17 @@ class GenerateFigureUseCase:
             "source_context": source_context,
             "model": "composite-assembler",
             "output_path": output_path,
-            "media_type": "image/png",
+            "output_format": output_format,
+            "media_type": media_type,
             "image_size_bytes": image_size,
             "prompt_blocks": 1,
             "prompt_length": len(manifest_prompt),
             "elapsed_seconds": round(time.time() - start, 2),
             "warnings": warnings,
             "manifest_id": manifest_id,
+            "quality_gate": quality_gate,
+            "review_summary": review_summary,
+            "review_history": review_history,
         }
 
     def _is_composite_payload(self, payload: dict[str, Any], requested_render_route: str) -> bool:
@@ -654,6 +729,9 @@ class GenerateFigureUseCase:
         source_context: dict[str, object],
         output_path: str,
         model: str,
+        quality_gate: dict[str, object] | None,
+        review_summary: dict[str, object],
+        review_history: list[dict[str, object]],
         warnings: list[str],
     ) -> str | None:
         if self._manifest_store is None:
@@ -682,9 +760,43 @@ class GenerateFigureUseCase:
             model=model,
             provider=self._provider_name,
             generation_contract="planned_payload",
+            quality_gate=quality_gate,
+            review_summary=review_summary,
+            review_history=[dict(item) for item in review_history],
             created_at=datetime.now(tz=timezone.utc),
             parent_manifest_id=parent_manifest_id,
             warnings=warnings,
         )
         self._manifest_store.save(manifest)
         return manifest.manifest_id
+
+    def _normalize_output_format(self, value: str | None) -> str | None:
+        if self._output_formatter is None:
+            return _clean_optional_text(value)
+        return self._output_formatter.normalize_output_format(value)
+
+    def _media_type_for_output_format(self, output_format: str | None) -> str | None:
+        if output_format is None or self._output_formatter is None:
+            return None
+        return self._output_formatter.media_type_for_output_format(output_format)
+
+    def _convert_generation_result(
+        self,
+        result: GenerationResult,
+        output_format: str | None,
+    ) -> GenerationResult:
+        if self._output_formatter is None:
+            return result
+        return self._output_formatter.convert_generation_result(result, output_format)
+
+    def _convert_file(self, path: Path, output_format: str | None) -> Path:
+        if self._output_formatter is None:
+            return path
+        return self._output_formatter.convert_file(path, output_format)
+
+
+def _clean_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None

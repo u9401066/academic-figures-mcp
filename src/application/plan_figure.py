@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from src.domain.classifier import classify_figure
+from src.domain.entities import Paper
+from src.domain.exceptions import ValidationError
 from src.domain.value_objects import (
     CJK_LANGUAGES,
     FIGURE_TYPE_TO_TEMPLATE,
@@ -20,13 +22,36 @@ OLLAMA_PROVIDER = "ollama"
 
 @dataclass
 class PlanFigureRequest:
-    pmid: str
+    pmid: str | None = None
+    source_title: str | None = None
+    source_summary: str | None = None
+    source_kind: str = "paper"
+    source_identifier: str | None = None
+    output_format: str | None = None
     figure_type: str = "auto"
     style_preset: str = "journal_default"
     language: str = "zh-TW"
     output_size: str = "1024x1536"
     target_journal: str | None = None
     expected_labels: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        self.pmid = _clean_optional_text(self.pmid)
+        self.source_title = _clean_optional_text(self.source_title)
+        self.source_summary = _clean_optional_text(self.source_summary)
+        self.source_identifier = _clean_optional_text(self.source_identifier)
+        self.output_format = _clean_optional_text(self.output_format)
+
+        if self.pmid is None and self.source_title is None:
+            raise ValidationError("Provide either pmid or source_title")
+        if self.pmid is not None and self.source_title is not None:
+            raise ValidationError("Provide either pmid or source_title, not both")
+        if self.pmid is not None and (
+            self.source_summary is not None
+            or self.source_identifier is not None
+            or self.source_kind != "paper"
+        ):
+            raise ValidationError("source_* fields are only supported when pmid is omitted")
 
 
 class PlanFigureUseCase:
@@ -41,7 +66,7 @@ class PlanFigureUseCase:
         self._provider_name = provider_name
 
     def execute(self, req: PlanFigureRequest) -> dict[str, object]:
-        paper = self._fetcher.fetch_paper(req.pmid)
+        paper = self._resolve_source(req)
 
         if req.figure_type == "auto":
             classification = classify_figure(
@@ -124,7 +149,7 @@ class PlanFigureUseCase:
             )
 
         academic_constraints = [
-            "Preserve citation integrity and PMID traceability",
+            "Preserve source traceability and citation integrity",
             ("Prefer publication-safe typography and legibility over decorative styling"),
             ("Avoid bitmap-first rendering for numerically exact or text-heavy figures"),
         ]
@@ -143,16 +168,24 @@ class PlanFigureUseCase:
                 f"Apply {journal_name} figure requirements from the YAML registry"
             )
 
-        must_include = [f"PMID {paper.pmid}"]
+        source_reference = _source_reference(paper)
+        must_include = [source_reference]
         citation = " · ".join(part for part in (paper.authors, paper.journal) if part)
         if citation:
             must_include.append(citation)
 
+        source_context = {
+            "source_kind": paper.source_kind,
+            "source_identifier": paper.source_identifier,
+            "pmid": paper.pmid or None,
+            "title": paper.title,
+            "journal": paper.journal,
+        }
         planned_payload = {
-            "asset_kind": "academic_figure",
+            "asset_kind": _asset_kind_for_source(paper.source_kind),
             "goal": (
-                f"Create a publication-ready {figure_type} academic figure summarizing "
-                f"PMID {paper.pmid}: {paper.title}"
+                f"Create a publication-ready {figure_type} visual summarizing "
+                f"{source_reference}: {paper.title}"
             ),
             "title": paper.title,
             "selected_figure_type": figure_type,
@@ -160,32 +193,33 @@ class PlanFigureUseCase:
             "style_preset": req.style_preset,
             "language": req.language,
             "output_size": req.output_size,
+            "output_format": req.output_format,
             "target_journal": req.target_journal,
             "journal_profile": journal_profile,
+            "journal_profile_checked": True,
             "model_recommendation": model_recommendation,
             "expected_labels": req.expected_labels or [],
-            "source_context": {
-                "pmid": paper.pmid,
-                "title": paper.title,
-                "journal": paper.journal,
-            },
+            "source_context": source_context,
             "prompt_pack": {
                 "prompt": prompt_preview,
                 "negative_constraints": academic_constraints,
                 "source_files": [],
             },
             "must_include": must_include,
-            "references": [f"PMID {paper.pmid}"],
+            "references": [source_reference],
         }
 
         return {
             "status": "ok",
-            "pmid": paper.pmid,
+            "pmid": paper.pmid or None,
+            "source_kind": paper.source_kind,
+            "source_identifier": paper.source_identifier,
             "title": paper.title,
             "journal": paper.journal,
             "style_preset": req.style_preset,
             "language": req.language,
             "output_size": req.output_size,
+            "output_format": req.output_format,
             "target_journal": req.target_journal,
             "journal_profile": journal_profile,
             "selected_figure_type": figure_type,
@@ -213,6 +247,31 @@ class PlanFigureUseCase:
                 },
             },
         }
+
+    def _resolve_source(self, req: PlanFigureRequest) -> Paper:
+        if req.pmid is not None:
+            fetched = self._fetcher.fetch_paper(req.pmid)
+            return Paper(
+                pmid=fetched.pmid,
+                title=fetched.title,
+                authors=fetched.authors,
+                journal=fetched.journal,
+                pubdate=fetched.pubdate,
+                abstract=fetched.abstract,
+                source_kind=fetched.source_kind or "paper",
+                source_identifier=fetched.source_identifier or fetched.pmid,
+            )
+
+        return Paper(
+            pmid="",
+            title=req.source_title or "",
+            authors="",
+            journal=_source_journal_label(req.source_kind),
+            pubdate="",
+            abstract=req.source_summary or "",
+            source_kind=req.source_kind,
+            source_identifier=req.source_identifier,
+        )
 
 
 def _recommend_render_route(
@@ -301,3 +360,42 @@ def _needs_numeric_fidelity(text: str) -> bool:
             "pk/pd",
         )
     )
+
+
+def _source_journal_label(source_kind: str) -> str:
+    return {
+        "paper": "Paper Brief",
+        "preprint": "Preprint",
+        "repo": "Code Repository",
+        "brief": "User Brief",
+    }.get(source_kind, source_kind.replace("_", " ").title())
+
+
+def _source_reference(paper: Paper) -> str:
+    if paper.pmid:
+        return f"PMID {paper.pmid}"
+
+    source_label = {
+        "paper": "Paper",
+        "preprint": "Preprint",
+        "repo": "Repository",
+        "brief": "Brief",
+    }.get(paper.source_kind, paper.source_kind.replace("_", " ").title())
+    if paper.source_identifier:
+        return f"{source_label} {paper.source_identifier}"
+    if paper.title:
+        return f"{source_label}: {paper.title}"
+    return f"Provided {source_label.lower()}"
+
+
+def _asset_kind_for_source(source_kind: str) -> str:
+    if source_kind == "repo":
+        return "repository_figure"
+    return "academic_figure"
+
+
+def _clean_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None

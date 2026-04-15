@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from io import BytesIO
 from typing import TYPE_CHECKING
 
 import pytest
+from PIL import Image
 
 from src.application.edit_figure import EditFigureRequest, EditFigureUseCase
 from src.domain.entities import GenerationResult
 from src.domain.exceptions import ImageNotFoundError
+from src.infrastructure.output_formatter import PillowOutputFormatter
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -25,6 +28,12 @@ class StubGenerator:
         return self._result
 
 
+def _png_bytes() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGBA", (2, 2), (40, 80, 200, 255)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def test_edit_figure_saves_default_edited_output(tmp_path: Path) -> None:
     image_path = tmp_path / "figure.png"
     image_path.write_bytes(b"source")
@@ -36,7 +45,10 @@ def test_edit_figure_saves_default_edited_output(tmp_path: Path) -> None:
             elapsed_seconds=1.25,
         )
     )
-    use_case = EditFigureUseCase(generator=generator)
+    use_case = EditFigureUseCase(
+        generator=generator,
+        output_formatter=PillowOutputFormatter(),
+    )
 
     result = use_case.execute(
         EditFigureRequest(image_path=str(image_path), feedback="Make the labels larger")
@@ -57,7 +69,10 @@ def test_edit_figure_reports_failed_edits(tmp_path: Path) -> None:
     generator = StubGenerator(
         GenerationResult(error="provider failed", model="stub-edit-model", elapsed_seconds=0.5)
     )
-    use_case = EditFigureUseCase(generator=generator)
+    use_case = EditFigureUseCase(
+        generator=generator,
+        output_formatter=PillowOutputFormatter(),
+    )
 
     result = use_case.execute(
         EditFigureRequest(image_path=str(image_path), feedback="Make the labels larger")
@@ -73,7 +88,8 @@ def test_edit_figure_reports_failed_edits(tmp_path: Path) -> None:
 
 def test_edit_figure_raises_for_missing_image(tmp_path: Path) -> None:
     use_case = EditFigureUseCase(
-        generator=StubGenerator(GenerationResult(image_bytes=b"edited-image"))
+        generator=StubGenerator(GenerationResult(image_bytes=b"edited-image")),
+        output_formatter=PillowOutputFormatter(),
     )
 
     with pytest.raises(ImageNotFoundError, match="Image not found"):
@@ -96,7 +112,10 @@ def test_edit_figure_normalizes_output_extension_to_match_media_type(tmp_path: P
             elapsed_seconds=0.75,
         )
     )
-    use_case = EditFigureUseCase(generator=generator)
+    use_case = EditFigureUseCase(
+        generator=generator,
+        output_formatter=PillowOutputFormatter(),
+    )
 
     result = use_case.execute(
         EditFigureRequest(
@@ -110,3 +129,67 @@ def test_edit_figure_normalizes_output_extension_to_match_media_type(tmp_path: P
     assert result["status"] == "ok"
     assert result["output_path"] == str(expected_output)
     assert expected_output.read_bytes() == b"\xff\xd8\xff\xe0edited-jpeg"
+
+
+def test_edit_figure_converts_requested_output_format(tmp_path: Path) -> None:
+    image_path = tmp_path / "figure.png"
+    image_path.write_bytes(b"source")
+    generator = StubGenerator(
+        GenerationResult(
+            image_bytes=_png_bytes(),
+            media_type="image/png",
+            model="stub-edit-model",
+            elapsed_seconds=0.75,
+        )
+    )
+    use_case = EditFigureUseCase(
+        generator=generator,
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    result = use_case.execute(
+        EditFigureRequest(
+            image_path=str(image_path),
+            feedback="Make the labels larger",
+            output_format="jpeg",
+        )
+    )
+
+    expected_output = tmp_path / "figure_edited.jpg"
+    assert result["status"] == "ok"
+    assert result["output_format"] == "jpeg"
+    assert result["media_type"] == "image/jpeg"
+    assert result["output_path"] == str(expected_output)
+    assert expected_output.read_bytes().startswith(b"\xff\xd8\xff")
+
+
+def test_edit_figure_converts_requested_output_format_to_gif(tmp_path: Path) -> None:
+    image_path = tmp_path / "figure.png"
+    image_path.write_bytes(b"source")
+    generator = StubGenerator(
+        GenerationResult(
+            image_bytes=_png_bytes(),
+            media_type="image/png",
+            model="stub-edit-model",
+            elapsed_seconds=0.75,
+        )
+    )
+    use_case = EditFigureUseCase(
+        generator=generator,
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    result = use_case.execute(
+        EditFigureRequest(
+            image_path=str(image_path),
+            feedback="Make the labels larger",
+            output_format="gif",
+        )
+    )
+
+    expected_output = tmp_path / "figure_edited.gif"
+    assert result["status"] == "ok"
+    assert result["output_format"] == "gif"
+    assert result["media_type"] == "image/gif"
+    assert result["output_path"] == str(expected_output)
+    assert expected_output.read_bytes().startswith(b"GIF8")

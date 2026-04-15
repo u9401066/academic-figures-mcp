@@ -28,6 +28,7 @@ The system must support both first-pass figure generation and iterative refineme
 3. As a user, I can inspect available presets, template sources, evaluation rubrics, and rendering routes before generation.
 4. As a user, I can refine a generated figure over multiple turns while preserving citation, label language, and layout intent.
 5. As a user, I can evaluate a figure against scientific, visual, and publication criteria.
+6. As a host, I can inspect a manifest's full review timeline and write back an external visual-review verdict.
 
 ## 4. Product Boundary
 
@@ -69,7 +70,7 @@ Out of scope for MVP:
    Current state: JSON-oriented command surface for extension workflows via afm-run.
 
 3. src/presentation/tools.py
-   Role: MCP tool handlers for plan_figure, generate_figure, edit_figure, evaluate_figure, and batch_generate.
+   Role: MCP tool handlers for planning, generation, editing, verification, manifest inspection, host-review write-back, and replay surfaces.
    Current strength: validates inputs at the presentation boundary before resolving dependencies.
 
 4. src/application/*
@@ -84,7 +85,14 @@ Out of scope for MVP:
    Role: provider config, multi-provider generation adapter, prompt engine, and PubMed metadata fetcher.
    Current strength: concrete integrations are isolated behind domain interfaces.
 
-### 5.3 Knowledge Base Templates
+### 5.3 Current Review and Manifest Contract
+
+1. Provider-side review is first-class runtime behavior: `generate_figure`, `replay_manifest`, and `retarget_journal` can run automated Google/OpenRouter vision review and persist the verdict into each manifest.
+2. Host-side review is an external-but-tracked route: Copilot or another host model inspects the image outside MCP execution and writes the verdict back through `record_host_review`.
+3. `list_manifests` is intentionally a summary surface; `get_manifest_detail` is the load-by-id tool for full manifest payloads, lineage context, and flattened review history.
+4. The persisted review policy is currently `provider_vision_required_host_optional`: `provider_vision` is the baseline gate and must pass, while `host_vision` remains optional and supplemental.
+
+### 5.4 Knowledge Base Templates
 
 1. templates/prompt-templates.md
    Contains multi-format prompt templates, including clinical flowchart, drug mechanism, comparison, anatomy, architecture, Nature-style multi-panel, and journal-ready patterns.
@@ -110,13 +118,13 @@ Out of scope for MVP:
 8. templates/ai-medical-illustration-evaluation.md
    Contains the evaluation rubric, common failure modes, and quality thresholds.
 
-### 5.4 Agent and Workspace Assets
+### 5.5 Agent and Workspace Assets
 
 1. .github/*.chatmode.md provides architect, ask, code, and debug chat modes for Copilot workflows.
 2. memory-bank/* is actively used to record current architecture, decisions, and progress.
 3. README.md explains the MCP server, direct-run flow, providers, competitive landscape, and VS Code extension at a high level.
 
-### 5.5 Current Risks and Gaps
+### 5.6 Current Risks and Gaps
 
 1. Plaintext local env files remain a commit-risk and should stay optional rather than becoming the default runtime path.
 2. Style conversion still depends more on prompt/template knowledge than on a fully structured preset registry.
@@ -341,17 +349,20 @@ The following open-source repositories are the most relevant references to track
 ### 9.2 Core Tool Surface
 
 1. generate_figure
-   Input: `planned_payload` or equivalent generic render request, plus optional `output_dir?`.
+   Input: `planned_payload` or direct source inputs such as `pmid` / `source_title`, plus optional `output_dir?`, `output_format?`.
    Output: asset path, asset kind, selected figure type, render route, model metadata, elapsed time, and plan linkage.
 
-   This is the only public bitmap-creation entrypoint. It should not require `pmid` directly at the generation boundary.
+   This is the primary public bitmap-creation entrypoint. It should accept direct source inputs and perform planning internally when the host does not need an explicit planning step.
+   When `output_format` is provided, the MCP layer should perform raster conversion internally instead of forcing the host to post-process provider output.
 
 2. plan_figure
-   Input: `pmid`, `figure_type?`, `style_preset?`, `language?`, `output_size?`.
+   Input: `pmid` or `source_title`, plus optional `source_kind?`, `source_summary?`, `source_identifier?`, `output_format?`, `figure_type?`, `style_preset?`, `language?`, `output_size?`.
    Output: figure classification, route recommendation, academic constraints, prompt preview, and a reusable `planned_payload` for `generate_figure`.
 
+   This planning boundary must support PMID-backed papers, preprints, repositories, and freeform academic briefs without forcing everything through PubMed metadata lookup.
+
 3. edit_figure
-   Input: `image_path`, `feedback`, `output_path?`.
+   Input: `image_path`, `feedback`, `output_path?`, `output_format?`.
    Output: edited asset path, model metadata, and elapsed time.
 
    This is a refinement harness around an existing asset, not a competing new-asset creation API.

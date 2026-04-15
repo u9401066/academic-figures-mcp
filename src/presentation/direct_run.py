@@ -27,21 +27,32 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     plan = subparsers.add_parser("plan")
-    plan.add_argument("--pmid", required=True)
+    plan_source = plan.add_mutually_exclusive_group(required=True)
+    plan_source.add_argument("--pmid")
+    plan_source.add_argument("--source-title")
+    plan.add_argument("--source-summary")
+    plan.add_argument("--source-kind", default="paper")
+    plan.add_argument("--source-identifier")
     plan.add_argument("--figure-type", default="auto")
     plan.add_argument("--style-preset", default="journal_default")
     plan.add_argument("--language", default="zh-TW")
     plan.add_argument("--output-size", default="1024x1536")
+    plan.add_argument("--output-format")
     plan.add_argument("--target-journal")
     plan.add_argument("--expected-label", action="append", dest="expected_labels")
 
     generate = subparsers.add_parser("generate")
     generate_source = generate.add_mutually_exclusive_group(required=True)
     generate_source.add_argument("--pmid")
+    generate_source.add_argument("--source-title")
     generate_source.add_argument("--payload-file")
+    generate.add_argument("--source-summary")
+    generate.add_argument("--source-kind", default="paper")
+    generate.add_argument("--source-identifier")
     generate.add_argument("--figure-type", default="auto")
     generate.add_argument("--language", default="zh-TW")
     generate.add_argument("--output-size", default="1024x1536")
+    generate.add_argument("--output-format")
     generate.add_argument("--output-dir")
     generate.add_argument("--target-journal")
 
@@ -60,6 +71,7 @@ def main() -> int:
     transform.add_argument("--image-path", required=True)
     transform.add_argument("--feedback", required=True)
     transform.add_argument("--output-path")
+    transform.add_argument("--output-format")
 
     multi_turn_edit = subparsers.add_parser("multi-turn-edit")
     multi_turn_edit.add_argument("--image-path", required=True)
@@ -83,6 +95,11 @@ def main() -> int:
         if args.command == "plan":
             result = tools.plan_figure(
                 pmid=args.pmid,
+                source_title=args.source_title,
+                source_summary=args.source_summary,
+                source_kind=args.source_kind,
+                source_identifier=args.source_identifier,
+                output_format=args.output_format,
                 figure_type=args.figure_type,
                 style_preset=args.style_preset,
                 language=args.language,
@@ -94,10 +111,15 @@ def main() -> int:
             payload = _load_payload_file(args.payload_file) if args.payload_file else None
             result = tools.generate_figure(
                 pmid=args.pmid,
+                source_title=args.source_title,
+                source_summary=args.source_summary,
+                source_kind=args.source_kind,
+                source_identifier=args.source_identifier,
                 planned_payload=payload,
                 figure_type=args.figure_type,
                 language=args.language,
                 output_size=args.output_size,
+                output_format=args.output_format,
                 output_dir=args.output_dir,
                 target_journal=args.target_journal,
             )
@@ -119,6 +141,7 @@ def main() -> int:
                 image_path=args.image_path,
                 feedback=args.feedback,
                 output_path=args.output_path,
+                output_format=args.output_format,
             )
         elif args.command == "multi-turn-edit":
             result = tools.multi_turn_edit(

@@ -6,9 +6,11 @@ from src.application.composite_figure import CompositeFigureRequest
 from src.application.edit_figure import EditFigureRequest
 from src.application.evaluate_figure import EvaluateFigureRequest
 from src.application.generate_figure import GenerateFigureRequest
+from src.application.get_manifest_detail import GetManifestDetailRequest
 from src.application.list_manifests import ListManifestsRequest
 from src.application.multi_turn_edit import MultiTurnEditRequest
 from src.application.plan_figure import PlanFigureRequest
+from src.application.record_host_review import RecordHostReviewRequest
 from src.application.replay_manifest import ReplayManifestRequest
 from src.application.retarget_journal import RetargetJournalRequest
 from src.application.verify_figure import VerifyFigureRequest
@@ -26,10 +28,14 @@ from src.presentation.validation import (
     normalize_manifest_id,
     normalize_optional_pmid,
     normalize_output_dir,
+    normalize_output_format,
     normalize_output_size,
+    normalize_plan_source,
     normalize_planned_payload,
-    normalize_pmid,
     normalize_pmids,
+    normalize_source_identifier,
+    normalize_source_kind,
+    normalize_source_summary,
     normalize_style_preset,
     normalize_target_journal,
 )
@@ -43,7 +49,12 @@ def _error_payload(error: Exception, **extra: object) -> dict[str, object]:
 
 @mcp.tool()
 def plan_figure(
-    pmid: str,
+    pmid: str | None = None,
+    source_title: str | None = None,
+    source_summary: str | None = None,
+    source_kind: str = "paper",
+    source_identifier: str | None = None,
+    output_format: str | None = None,
     figure_type: str = "auto",
     style_preset: str = "journal_default",
     language: str = "zh-TW",
@@ -56,12 +67,39 @@ def plan_figure(
     This tool returns a structured plan so an MCP host can decide whether to use
     direct image generation, SVG-style rendering, or deterministic chart routes.
 
+    Provide either pmid or a generic source brief. Generic planning supports
+    preprints, repositories, and freeform briefs by passing source_title plus
+    optional source_summary and source_identifier.
+
+    output_format: Optional final raster delivery type such as png, gif, jpeg, or webp.
+    The planner stores this preference inside planned_payload for downstream rendering.
+
     expected_labels: Optional list of exact text labels (especially CJK) the
     figure must contain. Enables CJK text fidelity guardrails and model escalation.
     """
     try:
+        normalized_pmid, normalized_source_title = normalize_plan_source(
+            pmid=pmid,
+            source_title=source_title,
+        )
+        normalized_source_summary = normalize_source_summary(source_summary)
+        normalized_source_kind = normalize_source_kind(source_kind)
+        normalized_source_identifier = normalize_source_identifier(source_identifier)
+        if normalized_pmid is not None and (
+            normalized_source_summary is not None
+            or normalized_source_identifier is not None
+            or normalized_source_kind != "paper"
+        ):
+            raise ValidationError(
+                "source_* fields are only supported when pmid is omitted"
+            )
         request = PlanFigureRequest(
-            pmid=normalize_pmid(pmid),
+            pmid=normalized_pmid,
+            source_title=normalized_source_title,
+            source_summary=normalized_source_summary,
+            source_kind=normalized_source_kind,
+            source_identifier=normalized_source_identifier,
+            output_format=normalize_output_format(output_format),
             figure_type=normalize_figure_type(figure_type),
             style_preset=normalize_style_preset(style_preset),
             language=normalize_language(language),
@@ -72,49 +110,90 @@ def plan_figure(
         uc = Container.get().plan_figure_uc()
         return uc.execute(request)
     except (ConfigurationError, ValidationError, DomainError) as exc:
-        return _error_payload(exc, pmid=pmid)
+        return _error_payload(exc, pmid=pmid, source_title=source_title)
 
 
 @mcp.tool()
 def generate_figure(
     pmid: str | None = None,
+    source_title: str | None = None,
+    source_summary: str | None = None,
+    source_kind: str = "paper",
+    source_identifier: str | None = None,
     planned_payload: dict[str, object] | None = None,
     figure_type: str = "auto",
     language: str = "zh-TW",
     output_size: str = "1024x1536",
+    output_format: str | None = None,
     output_dir: str | None = None,
     target_journal: str | None = None,
 ) -> dict[str, object]:
     """Generate a publication-ready visual asset.
 
-    Preferred path: provide a generic planned_payload produced by planning or
-    another harness layer. For backwards compatibility, callers may still pass
-    a PMID directly and let the use case build the prompt internally.
+    Single high-level entrypoint: callers may provide planned_payload directly,
+    or pass a PMID / generic source brief and let the use case plan internally
+    before rendering.
+
+    output_format: Optional final raster delivery type such as png, gif, jpeg, or webp.
+    MCP applies the conversion internally after generation when possible.
 
     figure_type: auto | flowchart | mechanism | comparison |
                  infographic | anatomical | timeline | data_visualization
     """
     try:
-        if pmid is None and planned_payload is None:
-            raise ValidationError("Either pmid or planned_payload is required")
-        if pmid is not None and planned_payload is not None:
-            raise ValidationError("Provide either pmid or planned_payload, not both")
+        normalized_pmid: str | None = None
+        normalized_source_title: str | None = None
+        normalized_source_summary: str | None = None
+        normalized_source_kind = "paper"
+        normalized_source_identifier: str | None = None
+
+        if planned_payload is None:
+            normalized_pmid, normalized_source_title = normalize_plan_source(
+                pmid=pmid,
+                source_title=source_title,
+            )
+            normalized_source_summary = normalize_source_summary(source_summary)
+            normalized_source_kind = normalize_source_kind(source_kind)
+            normalized_source_identifier = normalize_source_identifier(source_identifier)
+            if normalized_pmid is not None and (
+                normalized_source_summary is not None
+                or normalized_source_identifier is not None
+                or normalized_source_kind != "paper"
+            ):
+                raise ValidationError(
+                    "source_* fields are only supported when pmid is omitted"
+                )
+        elif (
+            pmid is not None
+            or source_title is not None
+            or source_summary is not None
+            or source_identifier is not None
+            or source_kind != "paper"
+        ):
+            raise ValidationError(
+                "Provide either planned_payload or source inputs, not both"
+            )
 
         request = GenerateFigureRequest(
-            pmid=normalize_pmid(pmid) if pmid is not None else None,
+            pmid=normalized_pmid,
+            source_title=normalized_source_title,
+            source_summary=normalized_source_summary,
+            source_kind=normalized_source_kind,
+            source_identifier=normalized_source_identifier,
             planned_payload=(
                 normalize_planned_payload(planned_payload) if planned_payload is not None else None
             ),
             figure_type=normalize_figure_type(figure_type),
             language=normalize_language(language),
             output_size=normalize_output_size(output_size),
+            output_format=normalize_output_format(output_format),
             output_dir=normalize_output_dir(output_dir),
             target_journal=normalize_target_journal(target_journal),
         )
         uc = Container.get().generate_figure_uc()
         return uc.execute(request)
     except (ConfigurationError, ValidationError, DomainError) as exc:
-        return _error_payload(exc, pmid=pmid)
+        return _error_payload(exc, pmid=pmid, source_title=source_title)
 
 
 @mcp.tool()
@@ -122,8 +201,11 @@ def edit_figure(
     image_path: str,
     feedback: str,
     output_path: str | None = None,
+    output_format: str | None = None,
 ) -> dict[str, object]:
     """Refine an academic figure using natural language feedback.
+
+    output_format: Optional final raster delivery type such as png, gif, jpeg, or webp.
 
     Examples: "箭頭改紅色", "標題字大一點", "Add PMID in footer"
     """
@@ -136,6 +218,7 @@ def edit_figure(
                 if output_path
                 else None
             ),
+            output_format=normalize_output_format(output_format),
         )
         uc = Container.get().edit_figure_uc()
         return uc.execute(request)
@@ -270,6 +353,36 @@ def replay_manifest(
 
 
 @mcp.tool()
+def record_host_review(
+    manifest_id: str,
+    passed: bool,
+    summary: str,
+    critical_issues: list[str] | None = None,
+    reviewer: str = "copilot_host",
+) -> dict[str, object]:
+    """Record a host-side visual review back into a persisted manifest.
+
+    Use this when Copilot or another host model inspects the generated image
+    directly and needs to write its verdict back into the review harness.
+    """
+    try:
+        normalized_critical_issues = [
+            str(item).strip() for item in (critical_issues or []) if str(item).strip()
+        ]
+        request = RecordHostReviewRequest(
+            manifest_id=normalize_manifest_id(manifest_id),
+            passed=passed,
+            summary=summary,
+            critical_issues=normalized_critical_issues,
+            reviewer=str(reviewer).strip() or "copilot_host",
+        )
+        uc = Container.get().record_host_review_uc()
+        return uc.execute(request)
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc, manifest_id=manifest_id)
+
+
+@mcp.tool()
 def retarget_journal(
     manifest_id: str,
     target_journal: str,
@@ -301,6 +414,23 @@ def list_manifests(limit: int = 20) -> dict[str, object]:
         return uc.execute(ListManifestsRequest(limit=normalized_limit))
     except (ConfigurationError, ValidationError, DomainError) as exc:
         return _error_payload(exc, limit=limit)
+
+
+@mcp.tool()
+def get_manifest_detail(
+    manifest_id: str,
+    include_lineage: bool = True,
+) -> dict[str, object]:
+    """Load one manifest with full review history and lineage context."""
+    try:
+        request = GetManifestDetailRequest(
+            manifest_id=normalize_manifest_id(manifest_id),
+            include_lineage=include_lineage,
+        )
+        uc = Container.get().get_manifest_detail_uc()
+        return uc.execute(request)
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc, manifest_id=manifest_id)
 
 
 @mcp.tool()

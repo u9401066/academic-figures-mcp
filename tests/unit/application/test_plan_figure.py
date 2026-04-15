@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from typing import cast
 
+import pytest
+
 from src.application.plan_figure import PlanFigureRequest, PlanFigureUseCase
 from src.domain.entities import Paper
+from src.domain.exceptions import ValidationError
 from src.domain.interfaces import MetadataFetcher, PromptBuilder
 
 
@@ -27,7 +30,8 @@ class StubPromptBuilder(PromptBuilder):
         output_size: str,
         expected_labels: list[str] | None = None,
     ) -> str:
-        return f"prompt::{paper.pmid}::{figure_type}::{language}::{output_size}"
+        source_marker = paper.pmid or paper.source_identifier or paper.title
+        return f"prompt::{source_marker}::{figure_type}::{language}::{output_size}"
 
     def inject_journal_requirements(
         self,
@@ -82,3 +86,63 @@ def test_plan_figure_resolves_explicit_target_journal() -> None:
     assert journal_profile["id"] == "nature_portfolio"
     assert payload_profile["id"] == "nature_portfolio"
     assert str(result["prompt_preview"]).endswith("::nature_profile")
+
+
+def test_plan_figure_carries_output_format_into_planned_payload() -> None:
+    use_case = PlanFigureUseCase(
+        fetcher=StubFetcher(),
+        prompt_builder=StubPromptBuilder(),
+        provider_name="google",
+    )
+
+    result = use_case.execute(PlanFigureRequest(pmid="12345678", output_format="webp"))
+
+    planned_payload = cast("dict[str, object]", result["planned_payload"])
+    assert result["output_format"] == "webp"
+    assert planned_payload["output_format"] == "webp"
+
+
+def test_plan_request_rejects_conflicting_source_modes() -> None:
+    with pytest.raises(ValidationError, match="Provide either pmid or source_title, not both"):
+        PlanFigureRequest(pmid="12345678", source_title="Repo brief")
+
+    with pytest.raises(ValidationError, match=r"source_\* fields are only supported"):
+        PlanFigureRequest(
+            pmid="12345678",
+            source_identifier="github.com/example/hhrag",
+        )
+
+
+def test_plan_figure_accepts_generic_repo_brief_without_fetching() -> None:
+    class FailingFetcher(MetadataFetcher):
+        def fetch_paper(self, pmid: str) -> Paper:
+            raise AssertionError("fetcher should not be called for generic sources")
+
+    use_case = PlanFigureUseCase(
+        fetcher=FailingFetcher(),
+        prompt_builder=StubPromptBuilder(),
+        provider_name="google",
+    )
+
+    result = use_case.execute(
+        PlanFigureRequest(
+            source_title="HyperHierarchicalRAG repository overview",
+            source_summary=(
+                "A repository that explains hierarchical retrieval and agent "
+                "workflow design."
+            ),
+            source_kind="repo",
+            source_identifier="github.com/example/hhrag",
+        )
+    )
+
+    planned_payload = cast("dict[str, object]", result["planned_payload"])
+    source_context = cast("dict[str, object]", planned_payload["source_context"])
+
+    assert result["pmid"] is None
+    assert result["source_kind"] == "repo"
+    assert planned_payload["asset_kind"] == "repository_figure"
+    assert source_context["source_kind"] == "repo"
+    assert source_context["source_identifier"] == "github.com/example/hhrag"
+    assert planned_payload["references"] == ["Repository github.com/example/hhrag"]
+    assert "github.com/example/hhrag" in str(result["prompt_preview"])

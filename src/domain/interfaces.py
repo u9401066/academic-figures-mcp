@@ -47,6 +47,26 @@ class ImageGenerator(ABC):
     ) -> GenerationResult: ...
 
 
+class OutputFormatter(ABC):
+    """Normalizes requested output formats and converts generated assets."""
+
+    @abstractmethod
+    def normalize_output_format(self, value: str | None) -> str | None: ...
+
+    @abstractmethod
+    def media_type_for_output_format(self, output_format: str) -> str: ...
+
+    @abstractmethod
+    def convert_generation_result(
+        self,
+        result: GenerationResult,
+        output_format: str | None,
+    ) -> GenerationResult: ...
+
+    @abstractmethod
+    def convert_file(self, path: Path, output_format: str | None) -> Path: ...
+
+
 class PromptBuilder(ABC):
     """Builds structured prompts for image generation."""
 

@@ -12,6 +12,8 @@ _PMID_PATTERN = re.compile(r"^\d{1,12}$")
 _LANGUAGE_PATTERN = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
 _OUTPUT_SIZE_PATTERN = re.compile(r"^(?P<width>\d{2,5})x(?P<height>\d{2,5})$")
 _SUPPORTED_FIGURE_TYPES = frozenset({"auto", *FIGURE_TYPE_TO_TEMPLATE.keys()})
+_SUPPORTED_SOURCE_KINDS = frozenset({"paper", "preprint", "repo", "brief"})
+_SUPPORTED_OUTPUT_FORMATS = frozenset({"png", "gif", "jpg", "jpeg", "webp", "svg"})
 _MAX_BATCH_PMIDS = 25
 _MAX_LIST_LIMIT = 200
 
@@ -32,6 +34,63 @@ def normalize_optional_pmid(value: str | None, *, field_name: str) -> str | None
     if not normalized:
         return None
     return normalize_pmid(normalized, field_name=field_name)
+
+
+def normalize_plan_source(
+    *,
+    pmid: str | None,
+    source_title: str | None,
+) -> tuple[str | None, str | None]:
+    normalized_pmid = normalize_optional_pmid(pmid, field_name="pmid")
+    normalized_source_title = normalize_source_title(source_title)
+    if normalized_pmid is None and normalized_source_title is None:
+        raise ValidationError("Provide either pmid or source_title")
+    if normalized_pmid is not None and normalized_source_title is not None:
+        raise ValidationError("Provide either pmid or source_title, not both")
+    return normalized_pmid, normalized_source_title
+
+
+def normalize_source_title(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        raise ValidationError("source_title cannot be blank when provided")
+    if len(normalized) > 300:
+        raise ValidationError("source_title is too long")
+    return normalized
+
+
+def normalize_source_summary(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if len(normalized) > 12000:
+        raise ValidationError("source_summary is too long")
+    return normalized
+
+
+def normalize_source_kind(value: str) -> str:
+    normalized = value.strip().lower()
+    if not normalized:
+        raise ValidationError("source_kind is required")
+    if normalized not in _SUPPORTED_SOURCE_KINDS:
+        supported = ", ".join(sorted(_SUPPORTED_SOURCE_KINDS))
+        raise ValidationError(f"source_kind must be one of: {supported}")
+    return normalized
+
+
+def normalize_source_identifier(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if len(normalized) > 500:
+        raise ValidationError("source_identifier is too long")
+    return normalized
 
 
 def normalize_figure_type(value: str, *, allow_auto: bool = True) -> str:
@@ -116,6 +175,18 @@ def normalize_output_dir(value: str | None) -> str | None:
     if not normalized:
         raise ValidationError("output_dir cannot be blank when provided")
     return normalized
+
+
+def normalize_output_format(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized not in _SUPPORTED_OUTPUT_FORMATS:
+        supported = ", ".join(sorted(_SUPPORTED_OUTPUT_FORMATS))
+        raise ValidationError(f"output_format must be one of: {supported}")
+    return "jpeg" if normalized == "jpg" else normalized
 
 
 def normalize_pmids(values: list[str]) -> list[str]:

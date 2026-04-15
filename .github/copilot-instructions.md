@@ -174,7 +174,7 @@ MCP_TRANSPORT=streamable-http uv run python -m src.presentation.server
 
 | Prompt | 用途 |
 |--------|------|
-| generate-figure.prompt.md | PMID → 學術圖表生成 |
+| generate-figure.prompt.md | PMID / preprint / repo brief → 學術圖表生成 |
 | edit-figure.prompt.md | 自然語言修改圖表 |
 | evaluate-figure.prompt.md | 8 維度品質評估 |
 | code-audit.prompt.md | 深度程式碼審計 |

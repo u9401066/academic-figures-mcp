@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from src.application.review_harness import build_review_summary, quality_gate_snapshot
+
 if TYPE_CHECKING:
     from src.domain.entities import GenerationManifest
     from src.domain.interfaces import ManifestStore
@@ -29,6 +31,10 @@ class ListManifestsUseCase:
     @staticmethod
     def _as_public_manifest(manifest: GenerationManifest) -> dict[str, Any]:
         prompt_preview = manifest.prompt.strip().splitlines()[0:2]
+        review_summary = manifest.review_summary or build_review_summary(
+            quality_gate=manifest.quality_gate,
+            provider_route_available=manifest.quality_gate is not None,
+        )
         return {
             "manifest_id": manifest.manifest_id,
             "parent_manifest_id": manifest.parent_manifest_id,
@@ -42,4 +48,7 @@ class ListManifestsUseCase:
             "created_at": manifest.created_at.isoformat(),
             "source_context": manifest.source_context,
             "prompt_preview": "\n".join(prompt_preview),
+            "quality_gate": quality_gate_snapshot(manifest.quality_gate),
+            "review_summary": review_summary,
+            "review_history_count": len(manifest.review_history),
         }
