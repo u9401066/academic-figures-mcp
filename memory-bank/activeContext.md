@@ -2,7 +2,7 @@
 
 ## Current Goals
 
-- The Copilot research workflow hooks, policy files, skills, and agent guidance are now consolidated on a dedicated branch and ready for review.
+- 0.4.3 release candidate 已完成 smoke/package 驗證，接下來只剩分段 commit、push、tag，並視本機憑證狀態決定是直接 publish 還是交由 GitHub Actions workflow 發布。
 
 ## Current Blockers
 

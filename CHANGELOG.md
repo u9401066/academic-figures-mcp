@@ -6,6 +6,25 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ## [Unreleased]
 
+## [0.4.3]
+
+### Added in 0.4.3
+
+- Added direct planning and generation support for non-PMID briefs such as preprints, repositories, and freeform research concepts through `source_title`, `source_kind`, `source_summary`, and `source_identifier` inputs.
+- Added `get_manifest_detail` and `record_host_review` so hosts can inspect full lineage-aware review history and persist external visual-review verdicts back into manifests.
+
+### Changed in 0.4.3
+
+- `generate_figure` is now the default single-entry drawing surface and performs internal plan-first orchestration when callers start from a PMID or generic source brief.
+- Output delivery now accepts `output_format` and performs internal raster conversion for `png`, `gif`, `jpeg`, and `webp`, while keeping `svg` as pass-through only.
+- Provider-side automated review is now persisted across generation, replay, and journal-retarget flows under the `provider_vision_required_host_optional` manifest policy.
+- Updated the VS Code extension branding with a marketplace gallery banner and a regenerated transparent icon asset that removes the visible white border.
+
+### Fixed in 0.4.3
+
+- Fixed composite-render manifest output paths so persisted manifest records follow the final converted asset path.
+- Fixed release-ready format coverage by adding official GIF validation, conversion, documentation, and regression coverage.
+
 ## [0.4.2]
 
 ### Changed in 0.4.2

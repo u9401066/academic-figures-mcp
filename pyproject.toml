@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "academic-figures-mcp"
-version = "0.4.2"
+version = "0.4.3"
 description = "Academic figure agent harness for multi-step planning, generation, and evaluation through MCP"
 readme = "README.md"
 requires-python = ">=3.10"
