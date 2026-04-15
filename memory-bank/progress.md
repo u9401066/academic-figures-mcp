@@ -2,15 +2,15 @@
 
 ## Done
 
-- 完成 0.4.3 release smoke：ruff、mypy、bandit、pytest、package_smoke、uv build、VSIX package 全部通過
-- 補上 VSX gallery banner，並以 icon.svg 重產透明 icon.png，移除舊 PNG 的白色外框
-- 將目前功能變更整理為可釋出的 0.4.3 版本：核心版號、extension 版號、uv.lock、CHANGELOG 已同步
-
+- Completed 0.4.3 release smoke validation: ruff, mypy, bandit, pytest, package_smoke, uv build, and VSIX packaging all passed.
+- Created segmented commits for core AFM functionality and 0.4.3 release branding/metadata.
+- Fast-forwarded main, pushed main to origin, and pushed annotated tag v0.4.3.
 
 ## Doing
 
-- 分段整理 git 變更並準備 commit / push / tag
+- Waiting on Marketplace/Open VSX publication path; local publish is blocked because VSCE_PAT and OVSX_PAT are not configured in this shell.
 
 ## Next
 
-- 檢查本機 VSCE / OVSX 憑證是否存在，能發佈就直接發佈，否則保留 tag 後走 GitHub Actions publish workflow
+- Check the GitHub Actions publish workflow triggered by v0.4.3 and confirm VS Code Marketplace / Open VSX release status.
+- If workflow secrets are missing, configure VSCE_PAT and OVSX_PAT or publish manually from a credentialed environment.

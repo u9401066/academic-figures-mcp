@@ -2,7 +2,7 @@
 
 ## Current Goals
 
-- 0.4.3 release candidate 已完成 smoke/package 驗證，接下來只剩分段 commit、push、tag，並視本機憑證狀態決定是直接 publish 還是交由 GitHub Actions workflow 發布。
+- 0.4.3 is now pushed to main and tagged. Core AFM planning/review/output-format changes and extension branding updates are released on git; local marketplace publish was skipped because VSCE_PAT and OVSX_PAT were absent, so the remaining follow-up is to confirm GitHub Actions publication or publish from a credentialed shell.
 
 ## Current Blockers
 
