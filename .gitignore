@@ -16,3 +16,4 @@ htmlcov/
 vscode-extension/out/
 *.vsix
 .tmp_eval_*.txt
+.github/hooks/_state/

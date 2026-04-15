@@ -2,7 +2,7 @@
 
 ## Current Goals
 
-- Finalizing pre-tag hardening for academic-figures-mcp: keep release automation stable while making metadata retrieval pluggable through the existing MetadataFetcher boundary.
+- The Copilot research workflow hooks, policy files, skills, and agent guidance are now consolidated on a dedicated branch and ready for review.
 
 ## Current Blockers
 

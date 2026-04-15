@@ -1,15 +1,14 @@
-# Progress (Updated: 2026-04-14)
+# Progress (Updated: 2026-04-15)
 
 ## Done
 
-- Fixed the VS Code local MCP launch path to use src.server so the FastMCP tool registry is not split across __main__ and src.presentation.server.
-- Updated the workspace MCP settings migration so legacy academicFigures entries are rewritten to the canonical academic-figures entry while preserving envFile or env settings.
-- Validated the fix with extension compile, extension-host smoke, and a real dev stdio MCP session that returned 11 tools and 2 prompts.
+- Added Copilot research workflow skill documents for PubMed and Zotero use cases.
+- Added Copilot hook scripts and shared policy files for prompt analysis, pipeline enforcement, result evaluation, and session lifecycle management.
+- Added agent and workflow guidance docs for the research assistant surface.
+- Cleaned local-only artifacts, removed the sensitive env backup copy, and created a dedicated branch for these changes.
 
 ## Doing
 
-- Preparing the verified MCP zero-tools fix for the v0.4.2 patch release.
-
 ## Next
 
-- Reload the VS Code window or restart the Academic Figures MCP server after upgrading so VS Code reconnects to the fixed local runtime.
+- Validate the PowerShell hook scripts on a machine with `pwsh` installed and decide whether to open a PR from the new branch.
