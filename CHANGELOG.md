@@ -10,6 +10,7 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ### Added in 0.4.3
 
+- Added Copilot research workflow hooks, shared pipeline policy files, reusable research agents, and PubMed/Zotero skill documents for guided literature workflows.
 - Added direct planning and generation support for non-PMID briefs such as preprints, repositories, and freeform research concepts through `source_title`, `source_kind`, `source_summary`, and `source_identifier` inputs.
 - Added `get_manifest_detail` and `record_host_review` so hosts can inspect full lineage-aware review history and persist external visual-review verdicts back into manifests.
 
