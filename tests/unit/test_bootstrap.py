@@ -56,7 +56,7 @@ def test_iter_safe_workdirs_prefers_override_and_deduplicates() -> None:
     ):
         workdirs = bootstrap._iter_safe_workdirs()
 
-    assert workdirs == ["/safe/override", "/safe/home"]
+    assert workdirs == ["/safe/override", str(Path("/safe/home"))]
 
 
 def test_server_main_normalizes_cwd_before_delegating() -> None:

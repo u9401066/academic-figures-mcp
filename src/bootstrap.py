@@ -65,11 +65,21 @@ def _iter_safe_workdirs() -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
     for candidate in candidates:
-        if candidate in seen:
+        candidate_key = _workdir_identity(candidate)
+        if candidate_key in seen:
             continue
-        seen.add(candidate)
+        seen.add(candidate_key)
         ordered.append(candidate)
     return ordered
+
+
+def _workdir_identity(path: str) -> str:
+    """Return a stable comparison key without depending on a valid cwd."""
+
+    expanded = os.path.expanduser(path)
+    with suppress(OSError, RuntimeError, ValueError):
+        return os.path.normcase(os.path.abspath(expanded))
+    return os.path.normcase(os.path.normpath(expanded))
 
 
 def _is_accessible_directory(path: str) -> bool:
