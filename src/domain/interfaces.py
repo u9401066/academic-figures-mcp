@@ -8,8 +8,7 @@ Rules:
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -18,17 +17,15 @@ if TYPE_CHECKING:
     from src.domain.value_objects import QualityVerdict
 
 
-class MetadataFetcher(ABC):
+class MetadataFetcher(Protocol):
     """Fetches paper metadata from an external catalog."""
 
-    @abstractmethod
     def fetch_paper(self, pmid: str) -> Paper: ...
 
 
-class ImageGenerator(ABC):
+class ImageGenerator(Protocol):
     """Generates or edits images from prompts."""
 
-    @abstractmethod
     def generate(
         self,
         prompt: str,
@@ -37,7 +34,6 @@ class ImageGenerator(ABC):
         aspect_ratio: str | None = None,
     ) -> GenerationResult: ...
 
-    @abstractmethod
     def edit(
         self,
         image_path: Path,
@@ -47,30 +43,42 @@ class ImageGenerator(ABC):
     ) -> GenerationResult: ...
 
 
-class OutputFormatter(ABC):
+class OutputFormatter(Protocol):
     """Normalizes requested output formats and converts generated assets."""
 
-    @abstractmethod
     def normalize_output_format(self, value: str | None) -> str | None: ...
 
-    @abstractmethod
     def media_type_for_output_format(self, output_format: str) -> str: ...
 
-    @abstractmethod
     def convert_generation_result(
         self,
         result: GenerationResult,
         output_format: str | None,
     ) -> GenerationResult: ...
 
-    @abstractmethod
     def convert_file(self, path: Path, output_format: str | None) -> Path: ...
 
 
-class PromptBuilder(ABC):
+class PublicationImageProcessor(Protocol):
+    """Prepares raster image files for publication delivery constraints."""
+
+    def prepare(
+        self,
+        image_path: Path,
+        *,
+        output_path: Path | None = None,
+        target_dpi: int = 600,
+        width_mm: float | None = None,
+        height_mm: float | None = None,
+        output_format: str | None = None,
+        preserve_aspect_ratio: bool = True,
+        allow_upscale: bool = True,
+    ) -> dict[str, object]: ...
+
+
+class PromptBuilder(Protocol):
     """Builds structured prompts for image generation."""
 
-    @abstractmethod
     def build_prompt(
         self,
         paper: Paper,
@@ -80,7 +88,6 @@ class PromptBuilder(ABC):
         expected_labels: list[str] | None = None,
     ) -> str: ...
 
-    @abstractmethod
     def inject_journal_requirements(
         self,
         prompt: str,
@@ -90,23 +97,19 @@ class PromptBuilder(ABC):
     ) -> tuple[str, dict[str, object] | None]: ...
 
 
-class ManifestStore(ABC):
+class ManifestStore(Protocol):
     """Persists generation manifests for replay and audit."""
 
-    @abstractmethod
     def save(self, manifest: GenerationManifest) -> GenerationManifest: ...
 
-    @abstractmethod
     def load(self, manifest_id: str) -> GenerationManifest: ...
 
-    @abstractmethod
     def list(self, limit: int = 20) -> list[GenerationManifest]: ...
 
 
-class FigureComposer(ABC):
+class FigureComposer(Protocol):
     """Assembles multi-panel figures into a single output."""
 
-    @abstractmethod
     def compose(
         self,
         panels: list[dict[str, str]],
@@ -118,10 +121,21 @@ class FigureComposer(ABC):
     ) -> dict[str, object]: ...
 
 
-class ImageVerifier(ABC):
+class FigureEvaluator(Protocol):
+    """Evaluates an existing figure and returns textual review output."""
+
+    def evaluate(
+        self,
+        image_path: Path,
+        instruction: str,
+        *,
+        model: str | None = None,
+    ) -> GenerationResult: ...
+
+
+class ImageVerifier(Protocol):
     """Verifies generated figure quality via vision / self-check."""
 
-    @abstractmethod
     def verify(
         self,
         image_bytes: bytes,

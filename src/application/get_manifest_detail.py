@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.application.review_harness import (
-    append_review_history,
-    build_host_review_entry,
-    build_provider_review_entry,
+    normalize_review_history,
+    normalize_review_summary,
+    serialize_quality_gate_contract,
 )
 
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ class GetManifestDetailUseCase:
 
         return {
             "status": "ok",
-            "manifest": manifest.to_dict(),
+            "manifest": self._as_manifest_entry(manifest),
             "lineage": [self._as_lineage_entry(item) for item in lineage],
             "review_timeline": review_timeline,
         }
@@ -59,7 +59,13 @@ class GetManifestDetailUseCase:
     ) -> list[dict[str, Any]]:
         timeline: list[dict[str, Any]] = []
         for manifest in lineage:
-            for event in self._effective_review_history(manifest):
+            for event in normalize_review_history(
+                manifest.review_history,
+                quality_gate=manifest.quality_gate,
+                review_summary=manifest.review_summary,
+                source=manifest.generation_contract,
+                reviewed_at=manifest.created_at.isoformat(),
+            ):
                 entry = dict(event)
                 entry.update(
                     {
@@ -72,7 +78,31 @@ class GetManifestDetailUseCase:
         return timeline
 
     @staticmethod
+    def _as_manifest_entry(manifest: GenerationManifest) -> dict[str, Any]:
+        payload = manifest.to_dict()
+        review_summary = normalize_review_summary(
+            manifest.review_summary,
+            quality_gate=manifest.quality_gate,
+            provider_route_available=manifest.quality_gate is not None,
+        )
+        payload["quality_gate"] = serialize_quality_gate_contract(manifest.quality_gate)
+        payload["review_summary"] = review_summary
+        payload["review_history"] = normalize_review_history(
+            manifest.review_history,
+            quality_gate=manifest.quality_gate,
+            review_summary=review_summary,
+            source=manifest.generation_contract,
+            reviewed_at=manifest.created_at.isoformat(),
+        )
+        return payload
+
+    @staticmethod
     def _as_lineage_entry(manifest: GenerationManifest) -> dict[str, Any]:
+        review_summary = normalize_review_summary(
+            manifest.review_summary,
+            quality_gate=manifest.quality_gate,
+            provider_route_available=manifest.quality_gate is not None,
+        )
         return {
             "manifest_id": manifest.manifest_id,
             "parent_manifest_id": manifest.parent_manifest_id,
@@ -80,57 +110,13 @@ class GetManifestDetailUseCase:
             "created_at": manifest.created_at.isoformat(),
             "output_path": manifest.output_path,
             "target_journal": manifest.target_journal,
-            "quality_gate": manifest.quality_gate,
-            "review_summary": manifest.review_summary,
-            "review_history": [dict(item) for item in manifest.review_history],
+            "quality_gate": serialize_quality_gate_contract(manifest.quality_gate),
+            "review_summary": review_summary,
+            "review_history": normalize_review_history(
+                manifest.review_history,
+                quality_gate=manifest.quality_gate,
+                review_summary=review_summary,
+                source=manifest.generation_contract,
+                reviewed_at=manifest.created_at.isoformat(),
+            ),
         }
-
-    @staticmethod
-    def _effective_review_history(manifest: GenerationManifest) -> list[dict[str, Any]]:
-        history = append_review_history([], None)
-        for item in manifest.review_history:
-            if isinstance(item, dict):
-                history.append(dict(item))
-        if history:
-            return history
-
-        provider_entry = build_provider_review_entry(
-            manifest.quality_gate,
-            source=manifest.generation_contract,
-            reviewed_at=manifest.created_at.isoformat(),
-        )
-        history = append_review_history(history, provider_entry)
-
-        host_route = _host_route_from_summary(manifest.review_summary)
-        if host_route is not None:
-            history = append_review_history(
-                history,
-                build_host_review_entry(
-                    passed=host_route.get("passed")
-                    if isinstance(host_route.get("passed"), bool)
-                    else None,
-                    summary=str(host_route.get("summary") or ""),
-                    critical_issues=[
-                        str(item) for item in (host_route.get("critical_issues") or [])
-                    ],
-                    reviewer=str(host_route.get("reviewer") or "copilot_host"),
-                    reviewed_at=str(
-                        host_route.get("reviewed_at") or manifest.created_at.isoformat()
-                    ),
-                ),
-            )
-        return history
-
-
-def _host_route_from_summary(review_summary: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not isinstance(review_summary, dict):
-        return None
-    routes = review_summary.get("routes")
-    if not isinstance(routes, dict):
-        return None
-    host_route = routes.get("host_vision")
-    if not isinstance(host_route, dict):
-        return None
-    if not host_route.get("executed"):
-        return None
-    return host_route

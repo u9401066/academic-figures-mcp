@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.application.review_harness import build_review_summary, quality_gate_snapshot
+from src.application.contracts import AggregateKind, serialize_aggregate_contract
+from src.application.review_harness import (
+    normalize_review_history,
+    normalize_review_summary,
+    quality_gate_snapshot,
+)
 
 if TYPE_CHECKING:
     from src.domain.entities import GenerationManifest
@@ -23,17 +28,32 @@ class ListManifestsUseCase:
 
     def execute(self, req: ListManifestsRequest) -> dict[str, Any]:
         manifests = self._manifest_store.list(limit=req.limit)
-        return {
+        payload: dict[str, Any] = {
             "status": "ok",
             "manifests": [self._as_public_manifest(m) for m in manifests],
         }
+        payload.update(
+            serialize_aggregate_contract(
+                kind=AggregateKind.LIST_MANIFESTS,
+                item_count=len(manifests),
+            )
+        )
+        return payload
 
     @staticmethod
     def _as_public_manifest(manifest: GenerationManifest) -> dict[str, Any]:
         prompt_preview = manifest.prompt.strip().splitlines()[0:2]
-        review_summary = manifest.review_summary or build_review_summary(
+        review_summary = normalize_review_summary(
+            manifest.review_summary,
             quality_gate=manifest.quality_gate,
             provider_route_available=manifest.quality_gate is not None,
+        )
+        review_history = normalize_review_history(
+            manifest.review_history,
+            quality_gate=manifest.quality_gate,
+            review_summary=review_summary,
+            source=manifest.generation_contract,
+            reviewed_at=manifest.created_at.isoformat(),
         )
         return {
             "manifest_id": manifest.manifest_id,
@@ -50,5 +70,5 @@ class ListManifestsUseCase:
             "prompt_preview": "\n".join(prompt_preview),
             "quality_gate": quality_gate_snapshot(manifest.quality_gate),
             "review_summary": review_summary,
-            "review_history_count": len(manifest.review_history),
+            "review_history_count": len(review_history),
         }

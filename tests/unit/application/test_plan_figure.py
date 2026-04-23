@@ -102,6 +102,28 @@ def test_plan_figure_carries_output_format_into_planned_payload() -> None:
     assert planned_payload["output_format"] == "webp"
 
 
+def test_plan_figure_reconciles_non_executable_route_to_executable_payload() -> None:
+    use_case = PlanFigureUseCase(
+        fetcher=StubFetcher(),
+        prompt_builder=StubPromptBuilder(),
+        provider_name="google",
+    )
+
+    result = use_case.execute(
+        PlanFigureRequest(
+            pmid="12345678",
+            figure_type="flowchart",
+            language="en",
+        )
+    )
+
+    planned_payload = cast("dict[str, object]", result["planned_payload"])
+    warnings = cast("list[str]", result["warnings"])
+    assert result["render_route"] == "image_generation"
+    assert planned_payload["render_route"] == "image_generation"
+    assert any("not executable yet" in warning for warning in warnings)
+
+
 def test_plan_request_rejects_conflicting_source_modes() -> None:
     with pytest.raises(ValidationError, match="Provide either pmid or source_title, not both"):
         PlanFigureRequest(pmid="12345678", source_title="Repo brief")

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from PIL import Image
 
 from src.application.generate_figure import GenerateFigureRequest, GenerateFigureUseCase
-from src.domain.entities import GenerationManifest, GenerationResult, Paper
+from src.domain.entities import GenerationManifest, GenerationResult, GenerationResultStatus, Paper
 from src.domain.exceptions import ValidationError
 from src.domain.interfaces import (
     ImageGenerator,
@@ -192,6 +192,25 @@ class BridgePromptBuilder(PromptBuilder):
         return prompt, None
 
 
+class StubPlanner:
+    def __init__(self, planned_payload: dict[str, object]) -> None:
+        self._planned_payload = planned_payload
+        self.calls: list[GenerateFigureRequest | object] = []
+
+    def execute(self, request: object) -> dict[str, object]:
+        self.calls.append(request)
+        return {
+            "status": "ok",
+            "planned_payload": self._planned_payload,
+            "pmid": "99999999",
+            "selected_figure_type": self._planned_payload.get(
+                "selected_figure_type",
+                "infographic",
+            ),
+            "warnings": ["planner warning"],
+        }
+
+
 def _png_bytes() -> bytes:
     buffer = BytesIO()
     Image.new("RGBA", (2, 2), (20, 120, 200, 255)).save(buffer, format="PNG")
@@ -234,6 +253,8 @@ def test_generate_figure_supports_generic_planned_payload(tmp_path: Path) -> Non
     )
 
     assert result["status"] == "ok"
+    assert result["result_status"] == GenerationResultStatus.IMAGE_READY.value
+    assert result["error_kind"] is None
     assert result["asset_kind"] == "repo_icon"
     assert result["render_route_used"] == "image_generation"
     assert Path(str(result["output_path"])).exists()
@@ -243,6 +264,43 @@ def test_generate_figure_supports_generic_planned_payload(tmp_path: Path) -> Non
     assert journal_profile["id"] == "nature_portfolio"
     assert prompt_builder.inject_target_journal == "Nature"
     assert result["generation_contract"] == "planned_payload"
+
+
+def test_generate_figure_rejects_unsupported_render_route_payload(tmp_path: Path) -> None:
+    generator = StubGenerator()
+    prompt_builder = StubPromptBuilder()
+    use_case = GenerateFigureUseCase(
+        fetcher=FailFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        output_dir=str(tmp_path),
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    payload = {
+        "asset_kind": "academic_figure",
+        "title": "Deterministic Flowchart",
+        "selected_figure_type": "flowchart",
+        "render_route": "code_render_svg",
+    }
+
+    result = use_case.execute(
+        GenerateFigureRequest(planned_payload=payload, output_dir=str(tmp_path))
+    )
+
+    assert result["status"] == "unsupported_render_route"
+    assert result["error_status"] == "unsupported_render_route"
+    assert result["error_category"] == "unsupported"
+    assert "result_status" not in result
+    assert result["render_route_requested"] == "code_render_svg"
+    assert result["supported_render_routes"] == [
+        "image_generation",
+        "composite_figure",
+        "layout_assemble_composite",
+    ]
+    assert "not executable" in str(result["error"])
+    assert generator.prompt == ""
+    assert prompt_builder.inject_calls == 0
 
 
 def test_generate_figure_pmid_single_entry_runs_internal_plan_first(tmp_path: Path) -> None:
@@ -273,6 +331,45 @@ def test_generate_figure_pmid_single_entry_runs_internal_plan_first(tmp_path: Pa
     assert generator.prompt == "planned::12345678::infographic::zh-TW::1024x1536::nature"
     assert prompt_builder.build_calls == 1
     assert prompt_builder.inject_calls == 1
+
+
+def test_generate_figure_uses_injected_planner_for_plan_first_bridge(tmp_path: Path) -> None:
+    generator = StubGenerator()
+    prompt_builder = StubPromptBuilder()
+    planner = StubPlanner(
+        {
+            "asset_kind": "academic_figure",
+            "title": "Injected Planner",
+            "selected_figure_type": "infographic",
+            "render_route": "image_generation",
+            "language": "en",
+            "output_size": "1024x1024",
+            "goal": "Render using injected planner output.",
+        }
+    )
+    use_case = GenerateFigureUseCase(
+        fetcher=FailFetcher(),
+        generator=generator,
+        prompt_builder=prompt_builder,
+        planner=planner,
+        output_dir=str(tmp_path),
+        output_formatter=PillowOutputFormatter(),
+    )
+
+    result = use_case.execute(
+        GenerateFigureRequest(
+            pmid="12345678",
+            figure_type="infographic",
+            output_dir=str(tmp_path),
+        )
+    )
+
+    assert result["status"] == "ok"
+    assert result["generation_contract"] == "single_entry_plan_first"
+    assert result["pmid"] == "99999999"
+    assert planner.calls
+    assert generator.prompt != ""
+    assert prompt_builder.build_calls == 0
 
 
 def test_generate_figure_generic_source_single_entry_runs_internal_plan_first(
@@ -354,6 +451,7 @@ def test_generate_figure_persists_manifest(tmp_path: Path) -> None:
     assert manifest.prompt.startswith("## Block 1")
     assert manifest.prompt_base.startswith("## Block 1")
     assert manifest.render_route_used == "image_generation"
+    assert manifest.review_summary is not None
     assert manifest.review_summary["policy"] == "provider_vision_required_host_optional"
     assert manifest.review_history == []
 
@@ -436,9 +534,11 @@ def test_generate_figure_returns_quality_gate_for_image_generation(tmp_path: Pat
     )
 
     quality_gate = cast("dict[str, object]", result["quality_gate"])
-    review_summary = cast("dict[str, object]", result["review_summary"])
+    review_summary = cast("dict[str, Any]", result["review_summary"])
     warnings = cast("list[str]", result["warnings"])
     assert quality_gate["passed"] is False
+    assert quality_gate["route_status"] == "executed"
+    assert quality_gate["review_status"] == "failed"
     assert quality_gate["missing_labels"] == ["Acute MI"]
     assert review_summary["provider_baseline_met"] is False
     assert review_summary["requirement_met"] is False
@@ -446,6 +546,7 @@ def test_generate_figure_returns_quality_gate_for_image_generation(tmp_path: Pat
     assert review_summary["recommended_next_action"] == "fix_and_rerun_provider_review"
     review_history = cast("list[dict[str, object]]", result["review_history"])
     assert review_history[0]["route"] == "provider_vision"
+    assert review_history[0]["route_status"] == "recorded"
     assert manifest_store.saved[0].review_history[0]["route"] == "provider_vision"
     assert verifier.calls[0]["expected_labels"] == ["Acute MI"]
     assert "Quality gate FAILED" in warnings[0]
@@ -496,10 +597,12 @@ def test_generate_figure_returns_quality_gate_for_composite_route(tmp_path: Path
     )
 
     quality_gate = cast("dict[str, object]", result["quality_gate"])
-    review_summary = cast("dict[str, object]", result["review_summary"])
+    review_summary = cast("dict[str, Any]", result["review_summary"])
     assert result["status"] == "ok"
     assert result["render_route_used"] == "composite_figure"
     assert quality_gate["passed"] is True
+    assert quality_gate["route_status"] == "executed"
+    assert quality_gate["review_status"] == "passed"
     assert review_summary["provider_baseline_met"] is True
     assert review_summary["requirement_met"] is True
     assert verifier.calls[0]["expected_labels"] == ["Panel A", "Panel B"]

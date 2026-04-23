@@ -8,7 +8,7 @@ from src.application.list_manifests import ListManifestsRequest, ListManifestsUs
 from src.application.record_host_review import RecordHostReviewRequest, RecordHostReviewUseCase
 from src.application.replay_manifest import ReplayManifestRequest, ReplayManifestUseCase
 from src.application.retarget_journal import RetargetJournalRequest, RetargetJournalUseCase
-from src.domain.entities import GenerationManifest, GenerationResult
+from src.domain.entities import GenerationManifest, GenerationResult, GenerationResultStatus
 from src.domain.interfaces import ImageGenerator, ImageVerifier, ManifestStore, PromptBuilder
 from src.domain.value_objects import QualityVerdict
 
@@ -53,6 +53,18 @@ class StubPromptBuilder(PromptBuilder):
                 {"id": target_journal.lower(), "matched_by": "target_journal"},
             )
         return (prompt, None)
+
+
+class NoProfilePromptBuilder(StubPromptBuilder):
+    def inject_journal_requirements(
+        self,
+        prompt: str,
+        *,
+        target_journal: str | None = None,
+        source_journal: str | None = None,
+    ) -> tuple[str, dict[str, object] | None]:
+        self.inject_target = target_journal
+        return f"{prompt}::{target_journal}", None
 
 
 class StubManifestStore(ManifestStore):
@@ -169,10 +181,14 @@ def test_replay_manifest_reuses_prompt(tmp_path: Path) -> None:
     )
 
     assert result["status"] == "ok"
+    assert result["result_status"] == GenerationResultStatus.IMAGE_READY.value
     assert generator.prompt == "prompt::with-journal"
     assert store.saved
     assert store.saved[0].parent_manifest_id == base_manifest.manifest_id
-    assert store.saved[0].quality_gate == result["quality_gate"]
+    assert store.saved[0].quality_gate is not None
+    assert store.saved[0].quality_gate["passed"] is True
+    assert result["quality_gate"]["route_status"] == "executed"
+    assert result["quality_gate"]["review_status"] == "passed"
     assert store.saved[0].review_summary == result["review_summary"]
     assert store.saved[0].review_history == result["review_history"]
     assert result["review_summary"]["provider_baseline_met"] is True
@@ -214,18 +230,46 @@ def test_retarget_journal_injects_profile_and_diff(tmp_path: Path) -> None:
     )
 
     assert result["status"] == "ok"
+    assert result["result_status"] == GenerationResultStatus.IMAGE_READY.value
     assert "Lancet" in generator.prompt
     assert prompt_builder.inject_target == "Lancet"
     assert store.saved
     saved = store.saved[0]
     assert saved.target_journal == "Lancet"
     assert saved.parent_manifest_id == base_manifest.manifest_id
+    assert saved.review_summary is not None
     assert saved.review_summary["provider_baseline_met"] is True
     assert saved.review_summary["requirement_met"] is True
     assert saved.review_history[0]["route"] == "provider_vision"
     assert Path(saved.output_path).exists()
     profile_diff = result["journal_profile_diff"]
     assert "added" in profile_diff
+
+
+def test_retarget_journal_persists_missing_profile_warning(tmp_path: Path) -> None:
+    base_manifest = _base_manifest(tmp_path / "orig.png")
+    store = StubManifestStore(base_manifest)
+    generator = StubGenerator()
+    prompt_builder = NoProfilePromptBuilder()
+    uc = RetargetJournalUseCase(
+        manifest_store=store,
+        generator=generator,
+        prompt_builder=prompt_builder,
+        default_output_dir=str(tmp_path),
+    )
+
+    result = uc.execute(
+        RetargetJournalRequest(
+            manifest_id=base_manifest.manifest_id,
+            target_journal="Unknown Journal",
+            output_dir=str(tmp_path),
+        )
+    )
+
+    assert result["status"] == "ok"
+    assert store.saved
+    assert store.saved[0].warnings == result["warnings"]
+    assert any("Unknown Journal" in warning for warning in store.saved[0].warnings)
 
 
 def test_list_manifests_returns_public_view(tmp_path: Path) -> None:
@@ -236,12 +280,25 @@ def test_list_manifests_returns_public_view(tmp_path: Path) -> None:
     result = uc.execute(ListManifestsRequest(limit=1))
 
     assert result["status"] == "ok"
+    assert result["aggregate_kind"] == "list_manifests"
+    assert result["aggregate_status"] == "list_ready"
+    assert result["item_count"] == 1
     manifests = result["manifests"]
     assert manifests[0]["manifest_id"] == "manifest-1"
     assert "prompt_preview" in manifests[0]
     assert manifests[0]["quality_gate"]["passed"] is True
+    assert manifests[0]["quality_gate"]["route_status"] == "executed"
+    assert manifests[0]["quality_gate"]["review_status"] == "passed"
     assert manifests[0]["review_summary"]["provider_baseline_met"] is True
     assert manifests[0]["review_summary"]["requirement_met"] is True
+    assert (
+        manifests[0]["review_summary"]["routes"]["provider_vision"]["route_status"]
+        == "executed"
+    )
+    assert (
+        manifests[0]["review_summary"]["routes"]["host_vision"]["route_status"]
+        == "external"
+    )
     assert manifests[0]["review_history_count"] == 1
 
 
@@ -263,10 +320,18 @@ def test_record_host_review_updates_manifest_review_summary(tmp_path: Path) -> N
     assert store.saved
     saved = store.saved[0]
     assert saved.manifest_id == base_manifest.manifest_id
+    assert result["quality_gate"]["route_status"] == "executed"
+    assert result["quality_gate"]["review_status"] == "passed"
+    assert saved.review_summary is not None
     assert saved.review_summary["passes_recorded"] == 2
     assert saved.review_summary["provider_baseline_met"] is True
     assert saved.review_summary["routes"]["host_vision"]["executed"] is True
     assert saved.review_summary["routes"]["host_vision"]["passed"] is True
+    assert result["review_summary"]["routes"]["host_vision"]["route_status"] == "recorded"
+    assert result["review_summary"]["routes"]["host_vision"]["review_status"] == "passed"
+    assert result["review_history"][0]["route_status"] == "recorded"
+    assert result["review_history"][1]["route_status"] == "recorded"
+    assert result["review_history"][1]["review_status"] == "passed"
     assert len(saved.review_history) == 2
     assert saved.review_history[-1]["route"] == "host_vision"
 
@@ -296,9 +361,13 @@ def test_record_host_review_cannot_replace_failed_provider_baseline(tmp_path: Pa
     )
 
     assert result["status"] == "ok"
+    assert result["quality_gate"]["route_status"] == "executed"
+    assert result["quality_gate"]["review_status"] == "failed"
     assert result["review_summary"]["passes_recorded"] == 1
     assert result["review_summary"]["provider_baseline_met"] is False
     assert result["review_summary"]["requirement_met"] is False
+    assert result["review_history"][0]["route_status"] == "recorded"
+    assert result["review_history"][1]["review_status"] == "passed"
 
 
 def test_get_manifest_detail_returns_lineage_and_review_timeline(tmp_path: Path) -> None:
@@ -359,9 +428,19 @@ def test_get_manifest_detail_returns_lineage_and_review_timeline(tmp_path: Path)
 
     assert result["status"] == "ok"
     assert result["manifest"]["manifest_id"] == "manifest-2"
+    assert result["manifest"]["quality_gate"]["route_status"] == "executed"
+    assert (
+        result["manifest"]["review_summary"]["routes"]["provider_vision"]["route_status"]
+        == "executed"
+    )
+    assert result["manifest"]["review_history"][0]["route_status"] == "recorded"
+    assert result["manifest"]["review_history"][0]["review_status"] == "failed"
     assert len(result["lineage"]) == 2
     assert result["lineage"][0]["manifest_id"] == "manifest-1"
     assert result["lineage"][1]["manifest_id"] == "manifest-2"
+    assert result["lineage"][0]["review_history"][0]["route_status"] == "recorded"
     assert len(result["review_timeline"]) == 2
     assert result["review_timeline"][0]["manifest_id"] == "manifest-1"
     assert result["review_timeline"][1]["manifest_id"] == "manifest-2"
+    assert result["review_timeline"][0]["route_status"] == "recorded"
+    assert result["review_timeline"][1]["review_status"] == "failed"

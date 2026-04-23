@@ -16,6 +16,21 @@ class JobStatus(Enum):
     FAILED = "failed"
 
 
+class GenerationResultStatus(Enum):
+    IMAGE_READY = "image_ready"
+    TEXT_READY = "text_ready"
+    FAILED = "failed"
+
+
+class GenerationErrorKind(Enum):
+    TRANSIENT = "transient"
+    PERMANENT = "permanent"
+    INVALID_RESPONSE = "invalid_response"
+    UNSUPPORTED = "unsupported"
+    NOT_FOUND = "not_found"
+    UNKNOWN = "unknown"
+
+
 @dataclass
 class Paper:
     """Paper metadata from PubMed or user input."""
@@ -40,10 +55,34 @@ class GenerationResult:
     elapsed_seconds: float = 0.0
     error: str = ""
     media_type: str = "image/png"
+    status: GenerationResultStatus | None = None
+    error_kind: GenerationErrorKind | None = None
+
+    def __post_init__(self) -> None:
+        if self.status is None:
+            if self.image_bytes is not None:
+                self.status = GenerationResultStatus.IMAGE_READY
+            elif self.text:
+                self.status = GenerationResultStatus.TEXT_READY
+            else:
+                self.status = GenerationResultStatus.FAILED
+
+        if self.status is GenerationResultStatus.FAILED and self.error_kind is None:
+            self.error_kind = GenerationErrorKind.UNKNOWN
+
+        if self.status is not GenerationResultStatus.FAILED and not self.error:
+            self.error_kind = None
 
     @property
     def ok(self) -> bool:
-        return self.image_bytes is not None and not self.error
+        return self.status is GenerationResultStatus.IMAGE_READY
+
+    @property
+    def succeeded(self) -> bool:
+        return self.status in {
+            GenerationResultStatus.IMAGE_READY,
+            GenerationResultStatus.TEXT_READY,
+        }
 
     @property
     def file_extension(self) -> str:
@@ -135,6 +174,12 @@ class GenerationManifest:
         review_summary = data.get("review_summary")
         review_history = data.get("review_history") or []
         warnings = data.get("warnings") or []
+        target_journal_raw = data.get("target_journal")
+        target_journal = (
+            target_journal_raw.strip()
+            if isinstance(target_journal_raw, str) and target_journal_raw.strip()
+            else None
+        )
         return cls(
             manifest_id=str(data.get("manifest_id") or ""),
             asset_kind=str(data.get("asset_kind") or "generic_visual"),
@@ -146,9 +191,7 @@ class GenerationManifest:
             prompt=str(data.get("prompt") or ""),
             prompt_base=str(data.get("prompt_base") or ""),
             planned_payload=dict(planned_payload),
-            target_journal=(
-                str(data["target_journal"]).strip() if "target_journal" in data else None
-            ),
+            target_journal=target_journal,
             journal_profile=dict(journal_profile) if isinstance(journal_profile, dict) else None,
             source_context=dict(source_context) if isinstance(source_context, dict) else {},
             output_path=str(data.get("output_path") or ""),

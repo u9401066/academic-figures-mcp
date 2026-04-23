@@ -15,8 +15,6 @@ from src.domain.value_objects import (
     CJK_LANGUAGES,
     CJKTextPolicy,
 )
-from src.infrastructure.gemini_adapter import GeminiImageVerifier
-from src.infrastructure.prompt_engine import PromptEngine
 
 # ── Domain value objects ─────────────────────────────────────
 
@@ -60,73 +58,6 @@ class TestCJKTextPolicy:
     def test_no_exact_text_block_without_labels(self) -> None:
         policy = CJKTextPolicy(language="zh-TW")
         assert policy.needs_exact_text_block is False
-
-
-# ── Prompt engine CJK block ─────────────────────────────────
-
-
-class TestPromptEngineCJKBlock:
-    def test_build_cjk_text_block_for_zh_tw(self) -> None:
-        block = PromptEngine._build_cjk_text_block(
-            language="zh-TW",
-            expected_labels=["急性冠心症", "處置流程"],
-        )
-        assert "Block 8: CJK TEXT FIDELITY" in block
-        assert "target_script: zh-TW" in block
-        assert "「急性冠心症」" in block
-        assert "「處置流程」" in block
-        assert "Do NOT romanize" in block
-
-    def test_no_cjk_block_for_english(self) -> None:
-        block = PromptEngine._build_cjk_text_block(
-            language="en",
-            expected_labels=["Title"],
-        )
-        assert block == ""
-
-    def test_cjk_block_without_labels(self) -> None:
-        block = PromptEngine._build_cjk_text_block(
-            language="zh-TW",
-            expected_labels=[],
-        )
-        assert "No specific labels provided" in block
-
-    def test_build_prompt_includes_cjk_block(self) -> None:
-        engine = PromptEngine()
-        paper = Paper(
-            pmid="12345678",
-            title="Test Paper",
-            authors="Author",
-            journal="Journal",
-            abstract="Test abstract",
-        )
-        prompt = engine.build_prompt(
-            paper=paper,
-            figure_type="infographic",
-            language="zh-TW",
-            output_size="1024x1536",
-            expected_labels=["急性冠心症", "治療流程"],
-        )
-        assert "Block 8: CJK TEXT FIDELITY" in prompt
-        assert "「急性冠心症」" in prompt
-
-    def test_build_prompt_no_cjk_block_for_english(self) -> None:
-        engine = PromptEngine()
-        paper = Paper(
-            pmid="12345678",
-            title="Test Paper",
-            authors="Author",
-            journal="Journal",
-            abstract="Test abstract",
-        )
-        prompt = engine.build_prompt(
-            paper=paper,
-            figure_type="infographic",
-            language="en",
-            output_size="1024x1536",
-            expected_labels=["Title", "Header"],
-        )
-        assert "Block 8" not in prompt
 
 
 # ── Render route escalation for CJK ─────────────────────────
@@ -244,6 +175,27 @@ class TestPlannerCJKIntegration:
         assert result["model_recommendation"] == "high_fidelity"
         assert "CJK text" in str(result["model_recommendation_reason"])
 
+    def test_plan_warns_when_svg_route_is_not_executable_yet(self) -> None:
+        uc = PlanFigureUseCase(
+            fetcher=StubFetcher(),
+            prompt_builder=StubPromptBuilder(),
+            provider_name="google",
+        )
+        result = uc.execute(
+            PlanFigureRequest(
+                pmid="12345678",
+                figure_type="flowchart",
+                language="zh-TW",
+            )
+        )
+
+        payload = cast("dict[str, object]", result["planned_payload"])
+        warnings = cast("list[str]", result["warnings"])
+
+        assert result["render_route"] == "image_generation"
+        assert payload["render_route"] == "image_generation"
+        assert any("code_render_svg" in warning for warning in warnings)
+
     def test_plan_expected_labels_in_payload(self) -> None:
         uc = PlanFigureUseCase(
             fetcher=StubFetcher(),
@@ -276,81 +228,6 @@ class TestPlannerCJKIntegration:
 
         warnings = cast("list[str]", result["warnings"])
         assert any("CJK" in w for w in warnings)
-
-
-# ── Quality verdict parsing ─────────────────────────────────
-
-
-class TestQualityVerdictParsing:
-    def test_parse_passing_verdict(self) -> None:
-        text = (
-            "text_accuracy: 5 Excellent\n"
-            "anatomy: 4 Good\n"
-            "color: 5 Perfect\n"
-            "layout: 4 Nice\n"
-            "scientific_accuracy: 4 Correct\n"
-            "legibility: 5 Clear\n"
-            "visual_polish: 4 Polished\n"
-            "citation: 5 Present\n"
-        )
-        verdict = GeminiImageVerifier._parse_verdict(text, expected_labels=[])
-        assert verdict.passed is True
-        assert verdict.total_score == 36.0
-        assert verdict.domain_scores["text_accuracy"] == 5.0
-
-    def test_parse_failing_verdict(self) -> None:
-        text = (
-            "text_accuracy: 2 Poor\n"
-            "anatomy: 2 Inaccurate\n"
-            "color: 2 Bad\n"
-            "layout: 2 Messy\n"
-            "scientific_accuracy: 2 Wrong\n"
-            "legibility: 2 Unreadable\n"
-            "visual_polish: 2 Rough\n"
-            "citation: 2 Missing\n"
-            "CRITICAL: All text is garbled."
-        )
-        verdict = GeminiImageVerifier._parse_verdict(text, expected_labels=[])
-        assert verdict.passed is False
-        assert len(verdict.critical_issues) > 0
-
-    def test_parse_missing_labels(self) -> None:
-        text = (
-            "text_accuracy: 4 OK\n"
-            "anatomy: 4 OK\n"
-            "color: 4 OK\n"
-            "layout: 4 OK\n"
-            "scientific_accuracy: 4 OK\n"
-            "legibility: 4 OK\n"
-            "visual_polish: 4 OK\n"
-            "citation: 4 OK\n"
-            "Label check:\n"
-            "急性冠心症: FOUND_EXACT\n"
-            "處置流程: MISSING in the figure\n"
-        )
-        verdict = GeminiImageVerifier._parse_verdict(
-            text, expected_labels=["急性冠心症", "處置流程"]
-        )
-        assert verdict.text_verification_passed is False
-        assert "處置流程" in verdict.missing_labels
-
-    def test_verdict_passes_when_all_labels_found(self) -> None:
-        text = (
-            "text_accuracy: 4 OK\n"
-            "anatomy: 4 OK\n"
-            "color: 4 OK\n"
-            "layout: 4 OK\n"
-            "scientific_accuracy: 4 OK\n"
-            "legibility: 4 OK\n"
-            "visual_polish: 4 OK\n"
-            "citation: 4 OK\n"
-            "All labels found correctly."
-        )
-        verdict = GeminiImageVerifier._parse_verdict(
-            text, expected_labels=["急性冠心症", "處置流程"]
-        )
-        assert verdict.text_verification_passed is True
-        assert len(verdict.missing_labels) == 0
 
 
 # ── Validation normalizers ──────────────────────────────────

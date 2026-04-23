@@ -9,11 +9,18 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from src.application.contracts import (
+    ApplicationErrorCategory,
+    ApplicationStatus,
+    serialize_error_contract,
+    serialize_generation_result_contract,
+)
 from src.application.review_harness import (
     append_review_history,
     build_provider_review_entry,
     build_review_summary,
     run_quality_gate,
+    serialize_public_review_payload,
 )
 from src.domain.entities import GenerationManifest
 
@@ -62,13 +69,21 @@ class RetargetJournalUseCase:
 
         result: GenerationResult = self._generator.generate(prompt=retargeted_prompt)
         if not result.ok:
-            return {
-                "status": "generation_failed",
+            error_payload: dict[str, Any] = {
+                "status": ApplicationStatus.GENERATION_FAILED.value,
                 "generation_contract": "journal_retarget",
                 "error": result.error,
                 "manifest_id": req.manifest_id,
                 "target_journal": req.target_journal,
             }
+            error_payload.update(
+                serialize_error_contract(
+                    status=ApplicationStatus.GENERATION_FAILED,
+                    category=ApplicationErrorCategory.GENERATION_RESULT,
+                )
+            )
+            error_payload.update(serialize_generation_result_contract(result))
+            return error_payload
 
         out_path = self._write_output(
             output_dir=req.output_dir,
@@ -78,6 +93,11 @@ class RetargetJournalUseCase:
             extension=result.file_extension,
         )
         warnings = list(manifest.warnings)
+        if req.target_journal and profile is None:
+            warnings.append(
+                f"No journal profile matched target_journal '{req.target_journal}'; "
+                "using generic academic defaults."
+            )
         expected_labels = _expected_labels_from_payload(manifest.planned_payload)
         quality_gate = run_quality_gate(
             self._verifier,
@@ -109,14 +129,9 @@ class RetargetJournalUseCase:
             warnings=warnings,
         )
         self._manifest_store.save(retargeted_manifest)
-        if req.target_journal and profile is None:
-            warnings.append(
-                f"No journal profile matched target_journal '{req.target_journal}'; "
-                "using generic academic defaults."
-            )
 
-        return {
-            "status": "ok",
+        success_payload: dict[str, Any] = {
+            "status": ApplicationStatus.OK.value,
             "manifest_id": retargeted_manifest.manifest_id,
             "parent_manifest_id": manifest.manifest_id,
             "output_path": str(out_path),
@@ -126,11 +141,20 @@ class RetargetJournalUseCase:
             "render_route_used": manifest.render_route_used,
             "model": result.model,
             "generation_contract": "journal_retarget",
-            "quality_gate": quality_gate,
-            "review_summary": review_summary,
-            "review_history": review_history,
             "warnings": warnings,
         }
+        success_payload.update(
+            serialize_public_review_payload(
+                quality_gate=quality_gate,
+                review_summary=review_summary,
+                review_history=review_history,
+                provider_route_available=self._verifier is not None,
+                source="retarget_journal",
+                reviewed_at=retargeted_manifest.created_at.isoformat(),
+            )
+        )
+        success_payload.update(serialize_generation_result_contract(result))
+        return success_payload
 
     def _write_output(
         self,

@@ -20,6 +20,8 @@ class FigureCategory(str, Enum):
 class RenderRoute(str, Enum):
     IMAGE_GENERATION = "image_generation"
     IMAGE_EDIT = "image_edit"
+    COMPOSITE_FIGURE = "composite_figure"
+    LAYOUT_ASSEMBLE_COMPOSITE = "layout_assemble_composite"
     CODE_RENDER_MATPLOTLIB = "code_render_matplotlib"
     CODE_RENDER_D2 = "code_render_d2"
     CODE_RENDER_MERMAID = "code_render_mermaid"
@@ -27,6 +29,13 @@ class RenderRoute(str, Enum):
     LAYOUT_ASSEMBLE_SVG = "layout_assemble_svg"
     RENDER_GATEWAY_KROKI = "render_gateway_kroki"
     VECTOR_SCENE_EDIT = "vector_scene_edit"
+
+
+EXECUTABLE_RENDER_ROUTES: tuple[str, ...] = (
+    RenderRoute.IMAGE_GENERATION.value,
+    RenderRoute.COMPOSITE_FIGURE.value,
+    RenderRoute.LAYOUT_ASSEMBLE_COMPOSITE.value,
+)
 
 
 FIGURE_TYPE_TO_TEMPLATE: dict[str, str] = {

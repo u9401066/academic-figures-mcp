@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING, cast
 
 from src.infrastructure.pubmed_client import PubMedClient
+
+if TYPE_CHECKING:
+    from pytest import MonkeyPatch
 
 
 class StubResponse:
@@ -14,10 +18,10 @@ class StubResponse:
         return None
 
     def json(self) -> dict[str, object]:
-        return json.loads(json.dumps(self._payload))
+        return cast("dict[str, object]", json.loads(json.dumps(self._payload)))
 
 
-def test_fetch_paper_uses_summary_and_abstract_endpoints(monkeypatch) -> None:
+def test_fetch_paper_uses_summary_and_abstract_endpoints(monkeypatch: MonkeyPatch) -> None:
     seen_urls: list[str] = []
 
     def fake_get(url: str, *, timeout: float) -> StubResponse:

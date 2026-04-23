@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from src.application.edit_figure import EditFigureRequest, EditFigureUseCase
-from src.domain.entities import GenerationResult
+from src.domain.entities import GenerationErrorKind, GenerationResult, GenerationResultStatus
 from src.domain.exceptions import ImageNotFoundError
 from src.infrastructure.output_formatter import PillowOutputFormatter
 
@@ -56,6 +56,8 @@ def test_edit_figure_saves_default_edited_output(tmp_path: Path) -> None:
 
     expected_output = tmp_path / "figure_edited.png"
     assert result["status"] == "ok"
+    assert result["result_status"] == GenerationResultStatus.IMAGE_READY.value
+    assert result["error_kind"] is None
     assert result["output_path"] == str(expected_output)
     assert expected_output.read_bytes() == b"edited-image"
     assert result["model"] == "stub-edit-model"
@@ -80,6 +82,10 @@ def test_edit_figure_reports_failed_edits(tmp_path: Path) -> None:
 
     assert result == {
         "status": "edit_failed",
+        "error_status": "edit_failed",
+        "error_category": "generation_result",
+        "result_status": GenerationResultStatus.FAILED.value,
+        "error_kind": GenerationErrorKind.UNKNOWN.value,
         "image_path": str(image_path),
         "error": "provider failed",
         "elapsed_seconds": 0.5,

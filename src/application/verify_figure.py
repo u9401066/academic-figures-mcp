@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from src.application.contracts import (
+    ApplicationStatus,
+    ReviewRoute,
+    ReviewRouteStatus,
+    serialize_review_route_contract,
+)
 from src.domain.exceptions import ImageNotFoundError
 
 if TYPE_CHECKING:
@@ -44,8 +50,8 @@ class VerifyFigureUseCase:
             language=req.language,
         )
 
-        return {
-            "status": "ok",
+        payload = {
+            "status": ApplicationStatus.OK.value,
             "passed": verdict.passed,
             "total_score": verdict.total_score,
             "domain_scores": verdict.domain_scores,
@@ -58,3 +64,11 @@ class VerifyFigureUseCase:
             "language": req.language,
             "expected_labels": req.expected_labels,
         }
+        payload.update(
+            serialize_review_route_contract(
+                route=ReviewRoute.PROVIDER_VISION,
+                route_status=ReviewRouteStatus.EXECUTED,
+                passed=verdict.passed,
+            )
+        )
+        return payload

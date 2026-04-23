@@ -2,7 +2,39 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from src.domain.entities import GenerationManifest
+from src.domain.entities import (
+    GenerationErrorKind,
+    GenerationManifest,
+    GenerationResult,
+    GenerationResultStatus,
+)
+
+
+def test_generation_result_infers_image_ready_status() -> None:
+    result = GenerationResult(image_bytes=b"png")
+
+    assert result.status is GenerationResultStatus.IMAGE_READY
+    assert result.ok is True
+    assert result.succeeded is True
+    assert result.error_kind is None
+
+
+def test_generation_result_infers_text_ready_status_even_with_warning_text() -> None:
+    result = GenerationResult(text="partial evaluation", error="provider warning")
+
+    assert result.status is GenerationResultStatus.TEXT_READY
+    assert result.ok is False
+    assert result.succeeded is True
+    assert result.error_kind is None
+
+
+def test_generation_result_infers_failed_status_and_unknown_error_kind() -> None:
+    result = GenerationResult(error="provider failed")
+
+    assert result.status is GenerationResultStatus.FAILED
+    assert result.ok is False
+    assert result.succeeded is False
+    assert result.error_kind is GenerationErrorKind.UNKNOWN
 
 
 def test_generation_manifest_round_trip_from_dict() -> None:
@@ -60,3 +92,30 @@ def test_generation_manifest_round_trip_from_dict() -> None:
     restored = GenerationManifest.from_dict(manifest.to_dict())
 
     assert restored == manifest
+
+
+def test_generation_manifest_round_trip_preserves_absent_target_journal() -> None:
+    manifest = GenerationManifest(
+        manifest_id="manifest-no-journal",
+        asset_kind="academic_figure",
+        figure_type="infographic",
+        language="en",
+        output_size="1024x1024",
+        render_route_requested="image_generation",
+        render_route_used="image_generation",
+        prompt="prompt",
+        prompt_base="prompt",
+        planned_payload={},
+        target_journal=None,
+        journal_profile=None,
+        source_context={},
+        output_path="outputs/figure.png",
+        model="stub-model",
+        provider="google",
+        generation_contract="planned_payload",
+    )
+
+    restored = GenerationManifest.from_dict(manifest.to_dict())
+
+    assert restored.target_journal is None
+    assert restored.to_dict()["target_journal"] is None

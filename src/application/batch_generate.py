@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from src.application.contracts import (
+    AggregateKind,
+    ApplicationStatus,
+    serialize_aggregate_contract,
+)
 from src.application.generate_figure import GenerateFigureRequest, GenerateFigureUseCase
 
 
@@ -29,7 +34,8 @@ class BatchGenerateUseCase:
             results.append(self._generate_uc.execute(req))
 
         success = sum(1 for r in results if r.get("status") == "ok")
-        return {
+        payload = {
+            "status": ApplicationStatus.OK.value,
             "total": len(pmids),
             "success": success,
             "failed": len(pmids) - success,
@@ -38,3 +44,13 @@ class BatchGenerateUseCase:
             "output_size": output_size,
             "results": results,
         }
+        payload.update(
+            serialize_aggregate_contract(
+                kind=AggregateKind.BATCH_GENERATE,
+                item_count=len(pmids),
+                total_count=len(pmids),
+                success_count=success,
+                failed_count=len(pmids) - success,
+            )
+        )
+        return payload

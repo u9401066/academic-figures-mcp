@@ -7,18 +7,26 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
+from src.application.contracts import (
+    ApplicationErrorCategory,
+    ApplicationStatus,
+    serialize_error_contract,
+    serialize_generation_result_contract,
+)
 from src.application.plan_figure import PlanFigureRequest, PlanFigureUseCase
 from src.application.review_harness import (
     append_review_history,
     build_provider_review_entry,
     build_review_summary,
     run_quality_gate,
+    serialize_public_review_payload,
 )
 from src.domain.entities import GenerationManifest
 from src.domain.exceptions import ValidationError
+from src.domain.value_objects import EXECUTABLE_RENDER_ROUTES, RenderRoute
 
 if TYPE_CHECKING:
     from src.domain.entities import GenerationResult
@@ -31,6 +39,10 @@ if TYPE_CHECKING:
         OutputFormatter,
         PromptBuilder,
     )
+
+
+class PlanFigureExecutor(Protocol):
+    def execute(self, req: PlanFigureRequest) -> dict[str, Any]: ...
 
 
 @dataclass
@@ -86,6 +98,7 @@ class GenerateFigureUseCase:
         fetcher: MetadataFetcher,
         generator: ImageGenerator,
         prompt_builder: PromptBuilder,
+        planner: PlanFigureExecutor | None = None,
         provider_name: str = "google",
         output_dir: str = ".academic-figures/outputs",
         manifest_store: ManifestStore | None = None,
@@ -96,6 +109,7 @@ class GenerateFigureUseCase:
         self._fetcher = fetcher
         self._generator = generator
         self._prompt_builder = prompt_builder
+        self._planner = planner
         self._provider_name = provider_name
         self._output_dir = output_dir
         self._manifest_store = manifest_store
@@ -103,7 +117,7 @@ class GenerateFigureUseCase:
         self._verifier = verifier
         self._output_formatter = output_formatter
 
-    def execute(self, req: GenerateFigureRequest) -> dict[str, object]:
+    def execute(self, req: GenerateFigureRequest) -> dict[str, Any]:
         if req.planned_payload is not None:
             return self._execute_planned_payload(req)
 
@@ -112,8 +126,8 @@ class GenerateFigureUseCase:
     def _execute_plan_first_bridge(
         self,
         req: GenerateFigureRequest,
-    ) -> dict[str, object]:
-        planner = PlanFigureUseCase(
+    ) -> dict[str, Any]:
+        planner = self._planner or PlanFigureUseCase(
             fetcher=self._fetcher,
             prompt_builder=self._prompt_builder,
             provider_name=self._provider_name,
@@ -134,11 +148,18 @@ class GenerateFigureUseCase:
         )
         payload = self._as_dict(plan_result.get("planned_payload"))
         if payload is None:
-            return {
-                "status": "error",
+            result_payload: dict[str, Any] = {
+                "status": ApplicationStatus.ERROR.value,
                 "error": "Planning step did not return planned_payload",
                 "pmid": req.pmid,
             }
+            result_payload.update(
+                serialize_error_contract(
+                    status=ApplicationStatus.ERROR,
+                    category=ApplicationErrorCategory.CONTRACT,
+                )
+            )
+            return result_payload
 
         generated_result = self._execute_planned_payload(
             GenerateFigureRequest(
@@ -174,7 +195,7 @@ class GenerateFigureUseCase:
         )
         return bridged_result
 
-    def _execute_planned_payload(self, req: GenerateFigureRequest) -> dict[str, object]:
+    def _execute_planned_payload(self, req: GenerateFigureRequest) -> dict[str, Any]:
         start = time.time()
         payload = req.planned_payload or {}
 
@@ -184,31 +205,42 @@ class GenerateFigureUseCase:
             or self._as_text(payload.get("figure_type"))
             or (req.figure_type if req.figure_type != "auto" else "infographic")
         )
-        requested_render_route = self._as_text(payload.get("render_route")) or "image_generation"
-        supported_render_routes = {
-            "image_generation",
-            "composite_figure",
-            "layout_assemble_composite",
-        }
-        render_route = (
-            requested_render_route
-            if requested_render_route in supported_render_routes
-            else "image_generation"
+        title = self._resolve_title(payload=payload, asset_kind=asset_kind)
+        requested_render_route = (
+            self._as_text(payload.get("render_route")) or RenderRoute.IMAGE_GENERATION.value
         )
-        warnings: list[str] = []
-        if requested_render_route not in supported_render_routes:
-            render_route = "image_generation"
-            warnings.append(
-                f"render_route '{requested_render_route}' is not implemented yet; "
-                "falling back to direct image generation"
+        if requested_render_route not in EXECUTABLE_RENDER_ROUTES:
+            result_payload: dict[str, Any] = {
+                "status": ApplicationStatus.UNSUPPORTED_RENDER_ROUTE.value,
+                "generation_contract": "planned_payload",
+                "asset_kind": asset_kind,
+                "title": title,
+                "figure_type": figure_type,
+                "render_route_requested": requested_render_route,
+                "supported_render_routes": list(EXECUTABLE_RENDER_ROUTES),
+                "error": (
+                    f"render_route '{requested_render_route}' is not executable by "
+                    "generate_figure. Re-plan with an executable route or implement a "
+                    "dedicated executor first."
+                ),
+                "warnings": [],
+            }
+            result_payload.update(
+                serialize_error_contract(
+                    status=ApplicationStatus.UNSUPPORTED_RENDER_ROUTE,
+                    category=ApplicationErrorCategory.UNSUPPORTED,
+                )
             )
+            return result_payload
+
+        render_route = requested_render_route
+        warnings: list[str] = []
 
         language = self._as_text(payload.get("language")) or req.language
         output_size = self._as_text(payload.get("output_size")) or req.output_size
         output_format = self._normalize_output_format(
             req.output_format or self._as_text(payload.get("output_format"))
         )
-        title = self._resolve_title(payload=payload, asset_kind=asset_kind)
         source_context_dict = self._as_dict(payload.get("source_context")) or {}
         payload_target_journal = self._as_text(payload.get("target_journal"))
         target_journal = req.target_journal or payload_target_journal
@@ -265,8 +297,8 @@ class GenerateFigureUseCase:
             model=self._resolve_model(payload),
         )
         if not result.ok:
-            return {
-                "status": "generation_failed",
+            failed_payload: dict[str, Any] = {
+                "status": ApplicationStatus.GENERATION_FAILED.value,
                 "generation_contract": "planned_payload",
                 "asset_kind": asset_kind,
                 "title": title,
@@ -279,6 +311,14 @@ class GenerateFigureUseCase:
                 "journal_profile": journal_profile,
                 "warnings": warnings,
             }
+            failed_payload.update(
+                serialize_error_contract(
+                    status=ApplicationStatus.GENERATION_FAILED,
+                    category=ApplicationErrorCategory.GENERATION_RESULT,
+                )
+            )
+            failed_payload.update(serialize_generation_result_contract(result))
+            return failed_payload
 
         result = self._convert_generation_result(result, output_format)
 
@@ -307,6 +347,7 @@ class GenerateFigureUseCase:
             [],
             build_provider_review_entry(quality_gate, source="generate_figure"),
         )
+        reviewed_at = datetime.now(tz=timezone.utc).isoformat()
         manifest_id = self._persist_manifest(
             payload=payload,
             prompt=prompt,
@@ -328,8 +369,8 @@ class GenerateFigureUseCase:
             warnings=warnings,
         )
 
-        return {
-            "status": "ok",
+        success_payload: dict[str, Any] = {
+            "status": ApplicationStatus.OK.value,
             "generation_contract": "planned_payload",
             "asset_kind": asset_kind,
             "title": title,
@@ -350,10 +391,19 @@ class GenerateFigureUseCase:
             "gemini_text": result.text,
             "warnings": warnings,
             "manifest_id": manifest_id,
-            "quality_gate": quality_gate,
-            "review_summary": review_summary,
-            "review_history": review_history,
         }
+        success_payload.update(
+            serialize_public_review_payload(
+                quality_gate=quality_gate,
+                review_summary=review_summary,
+                review_history=review_history,
+                provider_route_available=self._verifier is not None,
+                source="generate_figure",
+                reviewed_at=reviewed_at,
+            )
+        )
+        success_payload.update(serialize_generation_result_contract(result))
+        return success_payload
 
     def _execute_composite_payload(
         self,
@@ -371,7 +421,7 @@ class GenerateFigureUseCase:
         output_dir: str | None,
         output_format: str | None,
         start: float,
-    ) -> dict[str, object] | None:
+    ) -> dict[str, Any] | None:
         if not self._is_composite_payload(payload, requested_render_route):
             return None
         if self._composer is None:
@@ -392,7 +442,7 @@ class GenerateFigureUseCase:
         caption = self._as_text(payload.get("caption"))
         citation = self._as_text(payload.get("citation"))
         normalized_title = title or "Composite figure"
-        normalized_render_route = "composite_figure"
+        normalized_render_route = RenderRoute.COMPOSITE_FIGURE.value
 
         base_dir = Path(output_dir or self._output_dir)
         base_dir.mkdir(parents=True, exist_ok=True)
@@ -405,8 +455,8 @@ class GenerateFigureUseCase:
             output_path=str(out_path),
         )
         if compose_result.get("status") not in {"success", "ok"}:
-            return {
-                "status": "generation_failed",
+            result_payload: dict[str, Any] = {
+                "status": ApplicationStatus.GENERATION_FAILED.value,
                 "generation_contract": "composite_render",
                 "asset_kind": asset_kind,
                 "title": normalized_title,
@@ -417,6 +467,13 @@ class GenerateFigureUseCase:
                 "error": compose_result.get("error", "Composite assembly failed"),
                 "warnings": warnings,
             }
+            result_payload.update(
+                serialize_error_contract(
+                    status=ApplicationStatus.GENERATION_FAILED,
+                    category=ApplicationErrorCategory.EXECUTION,
+                )
+            )
+            return result_payload
 
         manifest_prompt = self._build_composite_prompt(
             title=normalized_title,
@@ -449,6 +506,7 @@ class GenerateFigureUseCase:
             [],
             build_provider_review_entry(quality_gate, source="generate_figure"),
         )
+        reviewed_at = datetime.now(tz=timezone.utc).isoformat()
         manifest_id = self._persist_manifest(
             payload=payload,
             prompt=manifest_prompt,
@@ -470,7 +528,7 @@ class GenerateFigureUseCase:
             warnings=warnings,
         )
         return {
-            "status": "ok",
+            "status": ApplicationStatus.OK.value,
             "generation_contract": "composite_render",
             "asset_kind": asset_kind or "multi_panel_figure",
             "title": normalized_title,
@@ -490,16 +548,24 @@ class GenerateFigureUseCase:
             "elapsed_seconds": round(time.time() - start, 2),
             "warnings": warnings,
             "manifest_id": manifest_id,
-            "quality_gate": quality_gate,
-            "review_summary": review_summary,
-            "review_history": review_history,
+            **serialize_public_review_payload(
+                quality_gate=quality_gate,
+                review_summary=review_summary,
+                review_history=review_history,
+                provider_route_available=self._verifier is not None,
+                source="generate_figure",
+                reviewed_at=reviewed_at,
+            ),
         }
 
     def _is_composite_payload(self, payload: dict[str, Any], requested_render_route: str) -> bool:
         panels = payload.get("panels")
         if isinstance(panels, list) and len(panels) > 0:
             return True
-        return requested_render_route in {"composite_figure", "layout_assemble_composite"}
+        return requested_render_route in {
+            RenderRoute.COMPOSITE_FIGURE.value,
+            RenderRoute.LAYOUT_ASSEMBLE_COMPOSITE.value,
+        }
 
     def _normalize_panels(self, raw_panels: object) -> list[dict[str, str]] | None:
         if not isinstance(raw_panels, list) or not raw_panels:

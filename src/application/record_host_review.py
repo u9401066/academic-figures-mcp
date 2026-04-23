@@ -10,6 +10,7 @@ from src.application.review_harness import (
     append_review_history,
     build_host_review_entry,
     build_review_summary,
+    serialize_public_review_payload,
 )
 from src.domain.exceptions import ValidationError
 
@@ -77,12 +78,21 @@ class RecordHostReviewUseCase:
         manifest.review_summary = review_summary
         self._manifest_store.save(manifest)
 
-        return {
+        review_payload = serialize_public_review_payload(
+            quality_gate=manifest.quality_gate,
+            review_summary=review_summary,
+            review_history=manifest.review_history,
+            provider_route_available=provider_available,
+            source=manifest.generation_contract,
+            reviewed_at=manifest.created_at.isoformat(),
+        )
+
+        payload = {
             "status": "ok",
             "manifest_id": manifest.manifest_id,
-            "quality_gate": manifest.quality_gate,
-            "review_summary": review_summary,
         }
+        payload.update(review_payload)
+        return payload
 
 
 def _extract_routes(review_summary: dict[str, Any] | None) -> dict[str, Any]:

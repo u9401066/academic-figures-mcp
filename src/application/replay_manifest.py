@@ -8,11 +8,18 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from src.application.contracts import (
+    ApplicationErrorCategory,
+    ApplicationStatus,
+    serialize_error_contract,
+    serialize_generation_result_contract,
+)
 from src.application.review_harness import (
     append_review_history,
     build_provider_review_entry,
     build_review_summary,
     run_quality_gate,
+    serialize_public_review_payload,
 )
 from src.domain.entities import GenerationManifest
 
@@ -45,12 +52,20 @@ class ReplayManifestUseCase:
         result: GenerationResult = self._generator.generate(prompt=manifest.prompt)
 
         if not result.ok:
-            return {
-                "status": "generation_failed",
+            error_payload: dict[str, Any] = {
+                "status": ApplicationStatus.GENERATION_FAILED.value,
                 "error": result.error,
                 "manifest_id": req.manifest_id,
                 "generation_contract": "manifest_replay",
             }
+            error_payload.update(
+                serialize_error_contract(
+                    status=ApplicationStatus.GENERATION_FAILED,
+                    category=ApplicationErrorCategory.GENERATION_RESULT,
+                )
+            )
+            error_payload.update(serialize_generation_result_contract(result))
+            return error_payload
 
         out_path = self._write_output(
             output_dir=req.output_dir,
@@ -88,8 +103,8 @@ class ReplayManifestUseCase:
         )
         self._manifest_store.save(replay_manifest)
 
-        return {
-            "status": "ok",
+        success_payload: dict[str, Any] = {
+            "status": ApplicationStatus.OK.value,
             "manifest_id": replay_manifest.manifest_id,
             "parent_manifest_id": manifest.manifest_id,
             "output_path": str(out_path),
@@ -100,11 +115,20 @@ class ReplayManifestUseCase:
             "prompt_length": len(manifest.prompt),
             "model": result.model,
             "generation_contract": "manifest_replay",
-            "quality_gate": quality_gate,
-            "review_summary": review_summary,
-            "review_history": review_history,
             "warnings": warnings,
         }
+        success_payload.update(
+            serialize_public_review_payload(
+                quality_gate=quality_gate,
+                review_summary=review_summary,
+                review_history=review_history,
+                provider_route_available=self._verifier is not None,
+                source="replay_manifest",
+                reviewed_at=replay_manifest.created_at.isoformat(),
+            )
+        )
+        success_payload.update(serialize_generation_result_contract(result))
+        return success_payload
 
     def _write_output(
         self,

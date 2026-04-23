@@ -10,8 +10,10 @@ from src.domain.entities import Paper
 from src.domain.exceptions import ValidationError
 from src.domain.value_objects import (
     CJK_LANGUAGES,
+    EXECUTABLE_RENDER_ROUTES,
     FIGURE_TYPE_TO_TEMPLATE,
     CJKTextPolicy,
+    RenderRoute,
 )
 
 if TYPE_CHECKING:
@@ -90,6 +92,7 @@ class PlanFigureUseCase:
             figure_type=figure_type,
             language=req.language,
         )
+        warnings: list[str] = []
 
         # ── CJK text policy & model escalation ─────────────
         cjk_policy = CJKTextPolicy(
@@ -104,31 +107,41 @@ class PlanFigureUseCase:
             cjk_warnings.append(
                 "CJK language detected — prompt includes exact-text fidelity block."
             )
-            if cjk_policy.recommend_pro_model and render_route == "image_generation":
+            if (
+                cjk_policy.recommend_pro_model
+                and render_route == RenderRoute.IMAGE_GENERATION.value
+            ):
                 model_recommendation = "high_fidelity"
                 model_reason = (
                     "CJK text with multiple labels: upgrading to Pro model for "
                     "better text rendering fidelity."
                 )
-            if cjk_policy.recommend_vector_route and render_route == "image_generation":
-                render_route = "code_render_svg"
-                route_reason = (
-                    "CJK text-heavy figure: forced to editable SVG for "
-                    "reliable character rendering."
+            if (
+                cjk_policy.recommend_vector_route
+                and render_route == RenderRoute.IMAGE_GENERATION.value
+            ):
+                cjk_warnings.append(
+                    "CJK text-heavy figure would prefer code_render_svg, but the current "
+                    "generate_figure executor still runs image_generation for this route."
                 )
 
         provider = self._provider_name
-        warnings: list[str] = []
-        if provider == OLLAMA_PROVIDER and render_route == "image_generation":
-            render_route = "code_render_svg"
+        if provider == OLLAMA_PROVIDER and render_route == RenderRoute.IMAGE_GENERATION.value:
             route_reason = (
-                "Ollama local runtime currently renders structured SVG figure briefs "
-                "instead of direct bitmap image generation."
+                "Ollama local runtime fulfills the image_generation contract via "
+                "structured SVG figure briefs instead of direct bitmap output."
             )
             warnings.append(
                 "Switch to Google or OpenRouter if you need bitmap image generation "
                 "or image editing."
             )
+
+        render_route, route_reason, route_warning = _resolve_executable_render_route(
+            render_route=render_route,
+            route_reason=route_reason,
+        )
+        if route_warning is not None:
+            warnings.append(route_warning)
 
         prompt_preview_base = self._prompt_builder.build_prompt(
             paper=paper,
@@ -325,12 +338,32 @@ def _recommend_render_route(
         )
 
     return (
-        "image_generation",
+        RenderRoute.IMAGE_GENERATION.value,
         (
             "Conceptual, anatomical, or mechanism-driven figures benefit "
             "from direct image generation."
         ),
     )
+
+
+def _resolve_executable_render_route(
+    *,
+    render_route: str,
+    route_reason: str,
+) -> tuple[str, str, str | None]:
+    if render_route in EXECUTABLE_RENDER_ROUTES:
+        return render_route, route_reason, None
+
+    fallback_route = RenderRoute.IMAGE_GENERATION.value
+    warning = (
+        f"Preferred render_route '{render_route}' is not executable yet; "
+        f"planned payload uses '{fallback_route}' until a dedicated executor is implemented."
+    )
+    resolved_reason = (
+        f"{route_reason} Current generate_figure execution is limited to executable routes, "
+        f"so planner selected '{fallback_route}' for now."
+    )
+    return fallback_route, resolved_reason, warning
 
 
 def _looks_text_heavy(text: str) -> bool:
