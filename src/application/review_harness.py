@@ -169,9 +169,7 @@ def serialize_quality_gate_contract(
             error=_coerce_error_text(quality_gate),
         )
     )
-    serialized["status"] = str(
-        serialized.get("status") or ReviewRouteStatus.EXECUTED.value
-    )
+    serialized["status"] = str(serialized.get("status") or ReviewRouteStatus.EXECUTED.value)
     return serialized
 
 
@@ -205,9 +203,7 @@ def normalize_review_history(
     reviewed_at: str,
 ) -> list[dict[str, Any]]:
     normalized = [
-        _normalize_review_entry(item)
-        for item in review_history
-        if isinstance(item, dict)
+        _normalize_review_entry(item) for item in review_history if isinstance(item, dict)
     ]
     if normalized:
         return normalized
@@ -230,9 +226,7 @@ def normalize_review_history(
                     else None
                 ),
                 summary=str(host_route.get("summary") or ""),
-                critical_issues=[
-                    str(item) for item in (host_route.get("critical_issues") or [])
-                ],
+                critical_issues=[str(item) for item in (host_route.get("critical_issues") or [])],
                 reviewer=str(host_route.get("reviewer") or "copilot_host"),
                 reviewed_at=str(host_route.get("reviewed_at") or reviewed_at),
             ),
@@ -373,9 +367,7 @@ def _normalize_review_entry(entry: dict[str, Any]) -> dict[str, Any]:
         return normalized
 
     route_status = _entry_route_status(normalized)
-    passed = (
-        normalized.get("passed") if isinstance(normalized.get("passed"), bool) else None
-    )
+    passed = normalized.get("passed") if isinstance(normalized.get("passed"), bool) else None
     error = str(normalized.get("error") or "") or None
     normalized.update(
         serialize_review_route_contract(
@@ -411,9 +403,7 @@ def _normalize_host_review(
     available: bool,
 ) -> dict[str, Any]:
     if not isinstance(host_review, dict):
-        route_status = (
-            ReviewRouteStatus.EXTERNAL if available else ReviewRouteStatus.NOT_AVAILABLE
-        )
+        route_status = ReviewRouteStatus.EXTERNAL if available else ReviewRouteStatus.NOT_AVAILABLE
         return {
             **serialize_review_route_contract(
                 route=ReviewRoute.HOST_VISION,

@@ -1107,8 +1107,7 @@ def parse_ollama_brief(text: str) -> OllamaFigureBrief | None:
     raw_sections = parsed.get("sections", [])
     sections_list = raw_sections if isinstance(raw_sections, list) else []
     sections = tuple(
-        _coerce_brief_section(item, index)
-        for index, item in enumerate(sections_list[:4])
+        _coerce_brief_section(item, index) for index, item in enumerate(sections_list[:4])
     )
     return OllamaFigureBrief(
         title=str(parsed.get("title", "Academic Figure")),

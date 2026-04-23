@@ -292,13 +292,9 @@ def test_list_manifests_returns_public_view(tmp_path: Path) -> None:
     assert manifests[0]["review_summary"]["provider_baseline_met"] is True
     assert manifests[0]["review_summary"]["requirement_met"] is True
     assert (
-        manifests[0]["review_summary"]["routes"]["provider_vision"]["route_status"]
-        == "executed"
+        manifests[0]["review_summary"]["routes"]["provider_vision"]["route_status"] == "executed"
     )
-    assert (
-        manifests[0]["review_summary"]["routes"]["host_vision"]["route_status"]
-        == "external"
-    )
+    assert manifests[0]["review_summary"]["routes"]["host_vision"]["route_status"] == "external"
     assert manifests[0]["review_history_count"] == 1
 
 

@@ -49,9 +49,7 @@ class MultiTurnEditRequest:
             raise ValidationError("max_turns must be at least 1")
 
         self.instructions = [
-            instruction.strip()
-            for instruction in self.instructions
-            if instruction.strip()
+            instruction.strip() for instruction in self.instructions if instruction.strip()
         ]
         if not self.instructions:
             raise ValidationError("instructions must include at least one edit instruction")

@@ -227,9 +227,7 @@ def test_image_verifier_parse_missing_labels() -> None:
         "處置流程: MISSING in the figure\n"
     )
 
-    verdict = GeminiImageVerifier._parse_verdict(
-        text, expected_labels=["急性冠心症", "處置流程"]
-    )
+    verdict = GeminiImageVerifier._parse_verdict(text, expected_labels=["急性冠心症", "處置流程"])
 
     assert verdict.text_verification_passed is False
     assert "處置流程" in verdict.missing_labels
@@ -248,9 +246,7 @@ def test_image_verifier_passes_when_all_labels_found() -> None:
         "All labels found correctly."
     )
 
-    verdict = GeminiImageVerifier._parse_verdict(
-        text, expected_labels=["急性冠心症", "處置流程"]
-    )
+    verdict = GeminiImageVerifier._parse_verdict(text, expected_labels=["急性冠心症", "處置流程"])
 
     assert verdict.text_verification_passed is True
     assert len(verdict.missing_labels) == 0

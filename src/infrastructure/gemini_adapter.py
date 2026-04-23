@@ -693,10 +693,13 @@ class EditSession:
             return GenerationResult(
                 model=self.model,
                 elapsed_seconds=round(time.time() - start, 2),
-                error=(failure or ProviderFailure(
-                    kind=ProviderFailureKind.INVALID_RESPONSE,
-                    message="No image returned",
-                )).message,
+                error=(
+                    failure
+                    or ProviderFailure(
+                        kind=ProviderFailureKind.INVALID_RESPONSE,
+                        message="No image returned",
+                    )
+                ).message,
             )
 
         return GenerationResult(
@@ -757,6 +760,7 @@ class GeminiFigureEvaluator(_GeminiProviderSupport, FigureEvaluator):
                 message="Provider evaluation failed",
             ),
         )
+
 
 class GeminiImageVerifier(_GeminiProviderSupport, ImageVerifier):
     """Vision-based quality gate using Gemini to verify generated figures."""

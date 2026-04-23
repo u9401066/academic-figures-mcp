@@ -94,9 +94,7 @@ def test_prepare_publication_image_raises_for_missing_image(tmp_path: Path) -> N
     use_case = PreparePublicationImageUseCase(processor=StubPublicationImageProcessor())
 
     with pytest.raises(ImageNotFoundError, match="Image not found"):
-        use_case.execute(
-            PreparePublicationImageRequest(image_path=str(tmp_path / "missing.png"))
-        )
+        use_case.execute(PreparePublicationImageRequest(image_path=str(tmp_path / "missing.png")))
 
 
 def test_prepare_publication_image_raises_for_directory_path(tmp_path: Path) -> None:
