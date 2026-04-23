@@ -14,6 +14,7 @@ _OUTPUT_SIZE_PATTERN = re.compile(r"^(?P<width>\d{2,5})x(?P<height>\d{2,5})$")
 _SUPPORTED_FIGURE_TYPES = frozenset({"auto", *FIGURE_TYPE_TO_TEMPLATE.keys()})
 _SUPPORTED_SOURCE_KINDS = frozenset({"paper", "preprint", "repo", "brief"})
 _SUPPORTED_OUTPUT_FORMATS = frozenset({"png", "gif", "jpg", "jpeg", "webp", "svg"})
+_SUPPORTED_PUBLICATION_OUTPUT_FORMATS = frozenset({"png", "jpg", "jpeg", "tif", "tiff"})
 _MAX_BATCH_PMIDS = 25
 _MAX_LIST_LIMIT = 200
 
@@ -187,6 +188,38 @@ def normalize_output_format(value: str | None) -> str | None:
         supported = ", ".join(sorted(_SUPPORTED_OUTPUT_FORMATS))
         raise ValidationError(f"output_format must be one of: {supported}")
     return "jpeg" if normalized == "jpg" else normalized
+
+
+def normalize_publication_output_format(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized not in _SUPPORTED_PUBLICATION_OUTPUT_FORMATS:
+        supported = ", ".join(sorted(_SUPPORTED_PUBLICATION_OUTPUT_FORMATS))
+        raise ValidationError(f"publication output_format must be one of: {supported}")
+    if normalized == "jpg":
+        return "jpeg"
+    if normalized == "tif":
+        return "tiff"
+    return normalized
+
+
+def normalize_target_dpi(value: int) -> int:
+    if value < 72 or value > 2400:
+        raise ValidationError("target_dpi must be between 72 and 2400")
+    return value
+
+
+def normalize_print_dimension_mm(value: float | None, *, field_name: str) -> float | None:
+    if value is None:
+        return None
+    if value <= 0:
+        raise ValidationError(f"{field_name} must be positive when provided")
+    if value > 500:
+        raise ValidationError(f"{field_name} is too large")
+    return float(value)
 
 
 def normalize_pmids(values: list[str]) -> list[str]:

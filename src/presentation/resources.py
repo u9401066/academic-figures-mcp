@@ -74,6 +74,7 @@ def inventory_resource() -> str:
                 "plan_figure",
                 "generate_figure",
                 "edit_figure",
+                "prepare_publication_image",
                 "evaluate_figure",
                 "batch_generate",
                 "composite_figure",
@@ -94,6 +95,76 @@ def inventory_resource() -> str:
                 "provider_route_tool": "verify_figure",
                 "host_write_back_tool": "record_host_review",
                 "manifest_detail_tool": "get_manifest_detail",
+                "extension_type_mapping_guidance": (
+                    "If the VS Code extension starts consuming manifest/detail payloads "
+                    "directly, map these typed review fields 1:1 into TypeScript "
+                    "interfaces instead of reading raw nested dict keys ad hoc."
+                ),
+                "typed_fields": {
+                    "quality_gate": [
+                        "route",
+                        "route_status",
+                        "review_route",
+                        "review_status",
+                        "passed",
+                    ],
+                    "review_summary_route": [
+                        "route",
+                        "route_status",
+                        "review_status",
+                        "available",
+                        "executed",
+                        "passed",
+                    ],
+                    "manifest_list_item": [
+                        "quality_gate.route_status",
+                        "review_summary.routes.provider_vision.route_status",
+                        "review_history_count",
+                    ],
+                    "manifest_detail": [
+                        "manifest.quality_gate.route_status",
+                        "manifest.review_history[].review_status",
+                        "review_timeline[].route_status",
+                    ],
+                },
+            },
+            "error_contract": {
+                "typed_fields": ["error_status", "error_category", "error"],
+                "categories": [
+                    "validation",
+                    "configuration",
+                    "domain",
+                    "unsupported",
+                    "contract",
+                    "execution",
+                    "generation_result",
+                    "unknown",
+                ],
+                "extension_type_mapping_guidance": (
+                    "When the VS Code extension starts reading manifest/detail or other "
+                    "host-facing MCP payloads directly, map error_status/error_category "
+                    "into TypeScript interfaces at the same time as the typed review schema."
+                ),
+            },
+            "aggregate_contract": {
+                "typed_fields": {
+                    "core": ["aggregate_kind", "aggregate_status", "item_count"],
+                    "batch_generate": ["total_count", "success_count", "failed_count"],
+                    "list_manifests": ["item_count"],
+                },
+                "kinds": ["batch_generate", "list_manifests"],
+                "statuses": [
+                    "complete_success",
+                    "complete_partial_failure",
+                    "complete_failure",
+                    "list_ready",
+                ],
+                "extension_type_mapping_guidance": (
+                    "Do not add unused TypeScript runtime interfaces yet. When the VS Code "
+                    "extension becomes a direct consumer of manifest/detail or aggregate MCP "
+                    "payloads, map the stabilized review/error/aggregate typed fields into "
+                    "TypeScript interfaces in the same slice."
+                ),
             },
             "resources": [
                 "academic-figures://inventory",

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from src.application.composite_figure import CompositeFigureRequest
     from src.application.generate_figure import GenerateFigureRequest
     from src.application.plan_figure import PlanFigureRequest
+    from src.application.prepare_publication_image import PreparePublicationImageRequest
 
 
 def test_generate_figure_rejects_invalid_pmid(monkeypatch: MonkeyPatch) -> None:
@@ -27,6 +28,8 @@ def test_generate_figure_rejects_invalid_pmid(monkeypatch: MonkeyPatch) -> None:
     result = tools.generate_figure(pmid="pmid-abc")
 
     assert result["status"] == "error"
+    assert result["error_status"] == "error"
+    assert result["error_category"] == "validation"
     assert "digits" in str(result["error"])
 
 
@@ -39,6 +42,8 @@ def test_plan_figure_rejects_invalid_output_size(monkeypatch: MonkeyPatch) -> No
     result = tools.plan_figure(pmid="12345678", output_size="huge")
 
     assert result["status"] == "error"
+    assert result["error_status"] == "error"
+    assert result["error_category"] == "validation"
     assert "output_size" in str(result["error"])
 
 
@@ -91,6 +96,8 @@ def test_plan_figure_rejects_mixed_pmid_and_generic_source(monkeypatch: MonkeyPa
     )
 
     assert result["status"] == "error"
+    assert result["error_status"] == "error"
+    assert result["error_category"] == "validation"
     assert "either pmid or source_title" in str(result["error"])
 
 
@@ -185,6 +192,8 @@ def test_composite_figure_rejects_mismatched_labels() -> None:
     )
 
     assert result["status"] == "error"
+    assert result["error_status"] == "error"
+    assert result["error_category"] == "validation"
     assert "same length" in str(result["error"])
 
 
@@ -237,6 +246,60 @@ def test_composite_figure_passes_request(monkeypatch: MonkeyPatch) -> None:
     assert request.caption == "Caption"
     assert request.citation == "PMID:123"
     assert request.output_path == "out/composite.png"
+
+
+def test_prepare_publication_image_passes_request(monkeypatch: MonkeyPatch) -> None:
+    class StubUseCase:
+        def __init__(self) -> None:
+            self.request: object | None = None
+
+        def execute(self, req: object) -> dict[str, object]:
+            self.request = req
+            return {"status": "ok", "generation_used": False}
+
+    class StubContainer:
+        def __init__(self) -> None:
+            self.uc = StubUseCase()
+
+        def prepare_publication_image_uc(self) -> StubUseCase:
+            return self.uc
+
+    container = StubContainer()
+    monkeypatch.setattr(Container, "get", lambda: container)
+
+    result = tools.prepare_publication_image(
+        image_path=" figure.png ",
+        output_path=" prepared.tif ",
+        target_dpi=600,
+        width_mm=60.0,
+        output_format="tif",
+        allow_upscale=False,
+    )
+
+    assert result["status"] == "ok"
+    request = cast("PreparePublicationImageRequest", container.uc.request)
+    assert request is not None
+    assert request.image_path == "figure.png"
+    assert request.output_path == "prepared.tif"
+    assert request.target_dpi == 600
+    assert request.width_mm == 60.0
+    assert request.height_mm is None
+    assert request.output_format == "tiff"
+    assert request.allow_upscale is False
+
+
+def test_prepare_publication_image_rejects_invalid_dpi(monkeypatch: MonkeyPatch) -> None:
+    def fail_container_get() -> object:
+        raise AssertionError("container should not run")
+
+    monkeypatch.setattr(Container, "get", fail_container_get)
+
+    result = tools.prepare_publication_image(image_path="figure.png", target_dpi=10)
+
+    assert result["status"] == "error"
+    assert result["error_status"] == "error"
+    assert result["error_category"] == "validation"
+    assert "target_dpi" in str(result["error"])
 
 
 def test_replay_manifest_passes_request(monkeypatch: MonkeyPatch) -> None:

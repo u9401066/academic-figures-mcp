@@ -73,6 +73,24 @@ def main() -> int:
     transform.add_argument("--output-path")
     transform.add_argument("--output-format")
 
+    prepare_image = subparsers.add_parser("prepare-image")
+    prepare_image.add_argument("--image-path", required=True)
+    prepare_image.add_argument("--output-path")
+    prepare_image.add_argument("--target-dpi", type=int, default=600)
+    prepare_image.add_argument("--width-mm", type=float)
+    prepare_image.add_argument("--height-mm", type=float)
+    prepare_image.add_argument("--output-format")
+    prepare_image.add_argument(
+        "--stretch",
+        action="store_true",
+        help="Resize exactly to width/height instead of preserving aspect ratio.",
+    )
+    prepare_image.add_argument(
+        "--no-upscale",
+        action="store_true",
+        help="Fail instead of upscaling when requested print size needs more pixels.",
+    )
+
     multi_turn_edit = subparsers.add_parser("multi-turn-edit")
     multi_turn_edit.add_argument("--image-path", required=True)
     multi_turn_edit.add_argument(
@@ -142,6 +160,17 @@ def main() -> int:
                 feedback=args.feedback,
                 output_path=args.output_path,
                 output_format=args.output_format,
+            )
+        elif args.command == "prepare-image":
+            result = tools.prepare_publication_image(
+                image_path=args.image_path,
+                output_path=args.output_path,
+                target_dpi=args.target_dpi,
+                width_mm=args.width_mm,
+                height_mm=args.height_mm,
+                output_format=args.output_format,
+                preserve_aspect_ratio=not args.stretch,
+                allow_upscale=not args.no_upscale,
             )
         elif args.command == "multi-turn-edit":
             result = tools.multi_turn_edit(

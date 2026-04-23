@@ -10,8 +10,11 @@ from src.presentation.validation import (
     normalize_plan_source,
     normalize_planned_payload,
     normalize_pmids,
+    normalize_print_dimension_mm,
+    normalize_publication_output_format,
     normalize_source_kind,
     normalize_source_title,
+    normalize_target_dpi,
     normalize_target_journal,
 )
 
@@ -23,6 +26,12 @@ def test_normalize_output_size_returns_canonical_format() -> None:
 def test_normalize_output_format_returns_canonical_format() -> None:
     assert normalize_output_format(" JPG ") == "jpeg"
     assert normalize_output_format(" gif ") == "gif"
+
+
+def test_normalize_publication_output_format_returns_canonical_format() -> None:
+    assert normalize_publication_output_format(" JPG ") == "jpeg"
+    assert normalize_publication_output_format(" tif ") == "tiff"
+    assert normalize_publication_output_format(" png ") == "png"
 
 
 @pytest.mark.parametrize(
@@ -83,6 +92,32 @@ def test_normalize_source_kind_rejects_unknown_values() -> None:
 def test_normalize_output_format_rejects_unknown_values() -> None:
     with pytest.raises(ValidationError, match="output_format must be one of"):
         normalize_output_format("bmp")
+
+
+def test_normalize_publication_output_format_rejects_gif() -> None:
+    with pytest.raises(ValidationError, match="publication output_format"):
+        normalize_publication_output_format("gif")
+
+
+def test_normalize_target_dpi_accepts_publication_values() -> None:
+    assert normalize_target_dpi(600) == 600
+
+
+@pytest.mark.parametrize("value", [71, 2401])
+def test_normalize_target_dpi_rejects_invalid_values(value: int) -> None:
+    with pytest.raises(ValidationError, match="target_dpi"):
+        normalize_target_dpi(value)
+
+
+def test_normalize_print_dimension_mm_accepts_optional_positive_values() -> None:
+    assert normalize_print_dimension_mm(None, field_name="width_mm") is None
+    assert normalize_print_dimension_mm(89.0, field_name="width_mm") == 89.0
+
+
+@pytest.mark.parametrize("value", [0.0, -1.0, 501.0])
+def test_normalize_print_dimension_mm_rejects_invalid_values(value: float) -> None:
+    with pytest.raises(ValidationError):
+        normalize_print_dimension_mm(value, field_name="width_mm")
 
 
 @pytest.mark.parametrize(

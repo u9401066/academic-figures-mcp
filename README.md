@@ -43,7 +43,7 @@ It now includes a YAML-backed journal registry so the MCP layer can inject figur
 
 This server targets the modern MCP Python SDK line and is intended to expose:
 
-- 13 MCP tools for planning, generation, editing, evaluation, review write-back, manifest inspection, replay, retargeting, verification, and multi-step refinement workflows
+- 14 MCP tools for planning, generation, editing, code-only publication image preparation, evaluation, review write-back, manifest inspection, replay, retargeting, verification, and multi-step refinement workflows
 - resources for discovery of presets, templates, and Gemini image defaults
 - reusable prompts for figure planning and style transformation
 
@@ -66,6 +66,7 @@ The system is designed as a multi-step academic workflow:
 | `plan_figure` | `pmid` or `source_title`, plus `source_kind?`, `source_summary?`, `source_identifier?`, `output_format?`, `figure_type?`, `style_preset?` | Structured plan with route, constraints, and next-step arguments |
 | `generate_figure` | `planned_payload` or a direct source input (`pmid` / `source_title`), plus `output_format?` | Single high-level draw entrypoint with optional internal planning and raster format conversion |
 | `edit_figure` | `image_path`, `feedback`, `output_format?` | Refined image via Gemini edit API with optional internal raster format conversion |
+| `prepare_publication_image` | `image_path`, `target_dpi?`, `width_mm?`, `height_mm?`, `output_format?`, `output_path?` | Pure-code Pillow resize/DPI metadata pass for 600 DPI publication delivery; no generation provider is used |
 | `evaluate_figure` | `image_path`, `figure_type?` | 8-domain scorecard with suggestions |
 | `batch_generate` | `pmids: list`, `figure_type?` | Batch generation results |
 | `composite_figure` | `panels`, `labels`, `title`, `caption?`, `citation?` | Publication-ready multi-panel montage with labels and DPI metadata |
@@ -80,6 +81,8 @@ The system is designed as a multi-step academic workflow:
 `generate_figure` is now the default high-level entrypoint. You can pass a PMID, a non-PMID source brief such as a preprint or repository summary, or a fully prepared `planned_payload`. When the request starts from source inputs, the server plans internally first and then renders. `plan_figure` remains available when a host explicitly wants to inspect or edit the plan before drawing.
 
 If you want a specific delivered file type, pass `output_format` such as `png`, `gif`, `jpeg`, or `webp`. MCP now performs raster-format conversion internally after generation or editing. SVG stays pass-through only; it is not rasterized automatically.
+
+Use `prepare_publication_image` when an existing raster image needs a journal-style 600 DPI delivery file without any AI generation. Pass `width_mm` and/or `height_mm` for the final print size so the tool can resample to the correct pixel dimensions; if no print size is supplied, it preserves the pixels and writes DPI metadata only.
 
 ### Reproducibility & Retargeting
 

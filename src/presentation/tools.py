@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.application.composite_figure import CompositeFigureRequest
+from src.application.contracts import serialize_exception_contract
 from src.application.edit_figure import EditFigureRequest
 from src.application.evaluate_figure import EvaluateFigureRequest
 from src.application.generate_figure import GenerateFigureRequest
@@ -10,6 +11,7 @@ from src.application.get_manifest_detail import GetManifestDetailRequest
 from src.application.list_manifests import ListManifestsRequest
 from src.application.multi_turn_edit import MultiTurnEditRequest
 from src.application.plan_figure import PlanFigureRequest
+from src.application.prepare_publication_image import PreparePublicationImageRequest
 from src.application.record_host_review import RecordHostReviewRequest
 from src.application.replay_manifest import ReplayManifestRequest
 from src.application.retarget_journal import RetargetJournalRequest
@@ -33,16 +35,20 @@ from src.presentation.validation import (
     normalize_plan_source,
     normalize_planned_payload,
     normalize_pmids,
+    normalize_print_dimension_mm,
+    normalize_publication_output_format,
     normalize_source_identifier,
     normalize_source_kind,
     normalize_source_summary,
     normalize_style_preset,
+    normalize_target_dpi,
     normalize_target_journal,
 )
 
 
 def _error_payload(error: Exception, **extra: object) -> dict[str, object]:
     payload: dict[str, object] = {"status": "error", "error": str(error)}
+    payload.update(serialize_exception_contract(error))
     payload.update(extra)
     return payload
 
@@ -215,6 +221,46 @@ def edit_figure(
             output_format=normalize_output_format(output_format),
         )
         uc = Container.get().edit_figure_uc()
+        return uc.execute(request)
+    except (ConfigurationError, ValidationError, DomainError) as exc:
+        return _error_payload(exc)
+
+
+@mcp.tool()
+def prepare_publication_image(
+    image_path: str,
+    output_path: str | None = None,
+    target_dpi: int = 600,
+    width_mm: float | None = None,
+    height_mm: float | None = None,
+    output_format: str | None = None,
+    preserve_aspect_ratio: bool = True,
+    allow_upscale: bool = True,
+) -> dict[str, object]:
+    """Resize a raster image and write publication DPI metadata using code only.
+
+    This tool never calls image-generation providers. To truly meet 600 DPI for
+    final publication size, pass width_mm and/or height_mm. Without a final print
+    size it preserves pixel dimensions and writes target_dpi metadata only.
+
+    output_format: Optional raster delivery type: png, jpeg, or tiff.
+    """
+    try:
+        request = PreparePublicationImageRequest(
+            image_path=normalize_image_path(image_path),
+            output_path=(
+                normalize_image_path(output_path, field_name="output_path")
+                if output_path
+                else None
+            ),
+            target_dpi=normalize_target_dpi(target_dpi),
+            width_mm=normalize_print_dimension_mm(width_mm, field_name="width_mm"),
+            height_mm=normalize_print_dimension_mm(height_mm, field_name="height_mm"),
+            output_format=normalize_publication_output_format(output_format),
+            preserve_aspect_ratio=preserve_aspect_ratio,
+            allow_upscale=allow_upscale,
+        )
+        uc = Container.get().prepare_publication_image_uc()
         return uc.execute(request)
     except (ConfigurationError, ValidationError, DomainError) as exc:
         return _error_payload(exc)
