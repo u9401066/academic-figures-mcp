@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sysconfig
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -30,7 +31,7 @@ class PromptEngine(PromptBuilder):
 
     def __init__(self, template_dir: str | None = None) -> None:
         if template_dir is None:
-            template_dir = str(Path(__file__).parent.parent.parent / "templates")
+            template_dir = str(self._resolve_default_template_dir())
         self.template_dir = Path(template_dir)
         self._templates: dict[str, str] = {}
         self._color_standards: str | None = None
@@ -189,6 +190,18 @@ class PromptEngine(PromptBuilder):
         return "\n".join(lines)
 
     # ── Loading helpers ─────────────────────────────────────
+
+    @staticmethod
+    def _resolve_default_template_dir() -> Path:
+        source_tree_dir = Path(__file__).resolve().parents[2] / "templates"
+        installed_data_dir = Path(sysconfig.get_path("data")) / "templates"
+
+        for candidate in (source_tree_dir, installed_data_dir):
+            if (candidate / "prompt-templates.md").exists() or (
+                candidate / "journal-profiles.yaml"
+            ).exists():
+                return candidate
+        return source_tree_dir
 
     def _load_all(self) -> None:
         try:

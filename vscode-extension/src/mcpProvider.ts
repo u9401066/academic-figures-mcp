@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 
@@ -24,6 +25,17 @@ const DEFAULT_GOOGLE_MODEL = "gemini-3.1-flash-image-preview";
 const DEFAULT_OPENROUTER_TITLE = "Academic Figures MCP";
 const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1";
 const DEFAULT_OLLAMA_MODEL = "llava:latest";
+const BLOCKED_ENVIRONMENT_KEYS = new Set([
+  "DYLD_INSERT_LIBRARIES",
+  "LD_LIBRARY_PATH",
+  "LD_PRELOAD",
+  "PATH",
+  "PYTHONEXECUTABLE",
+  "PYTHONHOME",
+  "PYTHONPATH",
+  "PYTHONSTARTUP",
+]);
+const BLOCKED_ENVIRONMENT_PREFIXES = ["DYLD_"];
 
 export class AcademicFiguresMcpProvider
   implements vscode.McpServerDefinitionProvider<vscode.McpStdioServerDefinition>
@@ -46,7 +58,15 @@ export class AcademicFiguresMcpProvider
   }
 
   public async provideMcpServerDefinitions(): Promise<vscode.McpStdioServerDefinition[]> {
-    const runtime = await this.getRuntimeSpec("server");
+    let runtime: AcademicFiguresRuntimeSpec;
+    try {
+      runtime = await this.getRuntimeSpec("server");
+    } catch (error) {
+      const message = this.describeRuntimeResolutionError(error);
+      this.log(message);
+      void vscode.window.showErrorMessage(message);
+      return [];
+    }
 
     this.log(
       `Providing MCP server definition (${runtime.mode}) -> ${runtime.command} ${runtime.args.join(" ")}`,
@@ -64,8 +84,11 @@ export class AcademicFiguresMcpProvider
   }
 
   public async getRuntimeSpec(target: AcademicFiguresRuntimeTarget): Promise<AcademicFiguresRuntimeSpec> {
-    const env = await this.buildEnvironment();
     const launch = this.resolveLaunch(target);
+    const env = await this.buildEnvironment(launch.cwd);
+    if (target === "server") {
+      env.MCP_TRANSPORT = "stdio";
+    }
     return {
       ...launch,
       env,
@@ -83,7 +106,7 @@ export class AcademicFiguresMcpProvider
     return server;
   }
 
-  private async buildEnvironment(): Promise<Record<string, string>> {
+  private async buildEnvironment(safeWorkingDirectory: string | undefined): Promise<Record<string, string>> {
     const config = vscode.workspace.getConfiguration("academicFiguresMcp");
     const provider = config.get<string>("imageProvider", "google");
     const credentialSource = config.get<string>("credentialSource", SECRET_STORAGE_SOURCE);
@@ -147,8 +170,9 @@ export class AcademicFiguresMcpProvider
     if (artifactRoot) {
       env.AFM_OUTPUT_DIR = artifactRoot;
     }
-    if (config.get<string>("transport", "stdio") === "streamable-http") {
-      env.MCP_TRANSPORT = "streamable-http";
+    if (safeWorkingDirectory) {
+      env.AFM_SAFE_CWD = safeWorkingDirectory;
+      env.PWD = safeWorkingDirectory;
     }
 
     return env;
@@ -168,8 +192,8 @@ export class AcademicFiguresMcpProvider
         args:
           target === "server"
             ? ["run", pythonCommand, "-m", "src.server"]
-            : ["run", pythonCommand, "-m", "src.presentation.direct_run"],
-        cwd: localRoot,
+            : ["run", pythonCommand, "-m", "src.direct_run"],
+        cwd: this.resolveSafeWorkingDirectory(localRoot),
       };
     }
 
@@ -177,7 +201,7 @@ export class AcademicFiguresMcpProvider
       mode: "package",
       command: "uvx",
       args: ["--from", packageName, target === "server" ? "afm-server" : "afm-run"],
-      cwd: this.getWorkspaceRoot(),
+      cwd: this.resolveSafeWorkingDirectory(this.getWorkspaceRoot()),
     };
   }
 
@@ -188,8 +212,13 @@ export class AcademicFiguresMcpProvider
     }
 
     const pyprojectPath = path.join(workspaceRoot, "pyproject.toml");
-    const serverPath = path.join(workspaceRoot, "src", "presentation", "server.py");
-    if (!fs.existsSync(pyprojectPath) || !fs.existsSync(serverPath)) {
+    const requiredPaths = [
+      pyprojectPath,
+      path.join(workspaceRoot, "src", "server.py"),
+      path.join(workspaceRoot, "src", "direct_run.py"),
+      path.join(workspaceRoot, "src", "bootstrap.py"),
+    ];
+    if (!requiredPaths.every((candidate) => fs.existsSync(candidate))) {
       return undefined;
     }
 
@@ -207,6 +236,33 @@ export class AcademicFiguresMcpProvider
 
   private getWorkspaceRoot(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+
+  private resolveSafeWorkingDirectory(preferred: string | undefined): string {
+    const candidates = [
+      preferred,
+      this.getWorkspaceRoot(),
+      this.context.globalStorageUri.fsPath,
+      os.homedir(),
+      os.tmpdir(),
+    ];
+
+    for (const candidate of candidates) {
+      if (!candidate || !this.isAccessibleDirectory(candidate)) {
+        continue;
+      }
+      return candidate;
+    }
+
+    throw new Error("Academic Figures MCP could not resolve a safe working directory.");
+  }
+
+  private isAccessibleDirectory(candidate: string): boolean {
+    try {
+      return fs.statSync(candidate).isDirectory() && fs.accessSync(candidate, fs.constants.R_OK | fs.constants.X_OK) === undefined;
+    } catch {
+      return false;
+    }
   }
 
   private readProcessEnvironment(): Record<string, string> {
@@ -260,6 +316,10 @@ export class AcademicFiguresMcpProvider
         const key = normalized.slice(0, separatorIndex).trim();
         const value = this.normalizeEnvironmentValue(normalized.slice(separatorIndex + 1).trim());
         if (key) {
+          if (this.isBlockedEnvironmentKey(key)) {
+            this.log(`Ignored blocked environment variable from ${filePath}: ${key}`);
+            continue;
+          }
           values[key] = value;
         }
       }
@@ -280,6 +340,21 @@ export class AcademicFiguresMcpProvider
       return value.slice(1, -1);
     }
     return value;
+  }
+
+  private isBlockedEnvironmentKey(key: string): boolean {
+    const normalized = key.trim().toUpperCase();
+    return (
+      BLOCKED_ENVIRONMENT_KEYS.has(normalized) ||
+      BLOCKED_ENVIRONMENT_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+    );
+  }
+
+  private describeRuntimeResolutionError(error: unknown): string {
+    if (error instanceof Error && error.message.trim()) {
+      return `Academic Figures MCP failed to resolve a launch runtime: ${error.message}`;
+    }
+    return "Academic Figures MCP failed to resolve a launch runtime.";
   }
 
   private log(message: string): void {

@@ -48,14 +48,20 @@ dev = [
 ]
 
 [project.scripts]
-afm-server = "src.presentation.server:main"
-afm-run = "src.presentation.direct_run:main"
+afm-server = "src.bootstrap:server_main"
+afm-run = "src.bootstrap:direct_run_main"
 
 [tool.setuptools.packages.find]
 include = ["src*"]
 
 [tool.setuptools.package-data]
 src = ["py.typed"]
+
+[tool.setuptools.data-files]
+templates = [
+    "templates/*.md",
+    "templates/*.yaml",
+]
 
 # ── Ruff ───────────────────────────────────────────────────
 [tool.ruff]

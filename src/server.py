@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.presentation.server import main
+from src.bootstrap import server_main as main
 
 if __name__ == "__main__":
     main()

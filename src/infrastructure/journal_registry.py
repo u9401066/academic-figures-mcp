@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 import yaml
@@ -58,7 +59,7 @@ class JournalRegistry:
             if not isinstance(profile_id, str) or not profile_id.strip():
                 continue
 
-            profile = dict(raw_profile)
+            profile = self._json_safe_dict(raw_profile)
             profile["id"] = profile_id.strip()
             self._profiles.append(profile)
 
@@ -109,3 +110,21 @@ class JournalRegistry:
             return ""
         normalized = re.sub(r"[^a-z0-9]+", " ", value.lower())
         return " ".join(normalized.split())
+
+    @classmethod
+    def _json_safe_dict(cls, value: dict[Any, Any]) -> dict[str, Any]:
+        return {str(key): cls._json_safe_value(item) for key, item in value.items()}
+
+    @classmethod
+    def _json_safe_value(cls, value: Any) -> Any:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        if isinstance(value, dict):
+            return cls._json_safe_dict(value)
+        if isinstance(value, list):
+            return [cls._json_safe_value(item) for item in value]
+        if isinstance(value, tuple):
+            return [cls._json_safe_value(item) for item in value]
+        return value

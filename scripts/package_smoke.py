@@ -63,7 +63,11 @@ def main() -> int:
             }
         )
 
-        help_result = _run(["uvx", "--from", ".", "afm-run", "--help"], repo_root, env)
+        help_result = _run(
+            ["uvx", "--no-cache", "--from", ".", "afm-run", "--help"],
+            repo_root,
+            env,
+        )
         if help_result.returncode != 0:
             return _fail("help", help_result, "uvx package entrypoint failed")
 
@@ -71,7 +75,18 @@ def main() -> int:
             return _fail("help", help_result, "afm-run help output missing expected usage text")
 
         plan_result = _run(
-            ["uvx", "--from", ".", "afm-run", "plan", "--pmid", SMOKE_PMID],
+            [
+                "uvx",
+                "--no-cache",
+                "--from",
+                ".",
+                "afm-run",
+                "plan",
+                "--pmid",
+                SMOKE_PMID,
+                "--target-journal",
+                "Nature",
+            ],
             repo_root,
             env,
         )
@@ -99,12 +114,24 @@ def main() -> int:
         if not isinstance(payload.get("planned_payload"), dict):
             return _fail("plan", plan_result, "planning smoke did not return planned_payload")
 
+        journal_profile = payload.get("journal_profile")
+        if (
+            not isinstance(journal_profile, dict)
+            or journal_profile.get("id") != "nature_portfolio"
+        ):
+            return _fail(
+                "plan",
+                plan_result,
+                "package-mode planning smoke did not load installed journal profiles",
+            )
+
         summary = {
             "stage": "package-smoke",
             "status": "ok",
             "pmid": payload.get("pmid"),
             "selected_figure_type": payload.get("selected_figure_type"),
             "render_route": payload.get("render_route"),
+            "journal_profile": journal_profile.get("id"),
         }
         print(json.dumps(summary, ensure_ascii=False))
         return 0

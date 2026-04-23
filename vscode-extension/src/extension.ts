@@ -732,7 +732,18 @@ async function runDirectTool(
   extraArgs: string[],
   progressTitle: string,
 ): Promise<DirectRunResult | undefined> {
-  const runtime = await deps.mcpProvider.getRuntimeSpec("directRun");
+  let runtime: AcademicFiguresRuntimeSpec;
+  try {
+    runtime = await deps.mcpProvider.getRuntimeSpec("directRun");
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.trim()
+        ? error.message
+        : `Direct-run ${command} failed before launch.`;
+    vscode.window.showErrorMessage(message);
+    log(`[direct-run:${command}:launch-error] ${message}`);
+    return undefined;
+  }
   const args = [...runtime.args, command, ...extraArgs];
   log(`Direct-run ${command}: ${runtime.command} ${args.join(" ")}`);
 
