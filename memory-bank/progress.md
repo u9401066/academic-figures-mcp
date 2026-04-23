@@ -48,11 +48,18 @@
 - 已新增純 code publication image preparation 工具：`prepare_publication_image` MCP tool 與 `afm-run prepare-image` CLI 可用 Pillow 將既有 raster 圖片依最終印刷尺寸重採樣並寫入 600 DPI metadata，不會呼叫任何生成 provider
 - 已補齊 publication image processor 的 application / infrastructure / presentation 測試，並更新 README 與 inventory tool list
 - 最新全量驗證通過：`uv run pytest` 181 passed、`uv run ruff check .`、`uv run mypy src tests`，並實跑 `afm-run prepare-image` 成功輸出 600 DPI TIFF
+- 已完成 0.4.5 發布前功能修正：publication image processor 會拒絕 unsupported output suffix、修正 output_format/副檔名不一致、包裝目錄/不可讀影像錯誤、並讓 metadata-only warning 顯示實際 target DPI
+- 已新增 OpenAI `gpt-image-2` provider path：`AFM_IMAGE_PROVIDER=openai` 使用 Images API 進行 generation/edit，Responses API + `OPENAI_VISION_MODEL` 進行 provider-side review
+- 已把 `output_size` 從 generate/replay/retarget application 層結構化傳到 provider runtime，OpenAI Images API 會優先使用該值作為 `size`
+- 已新增 `academic-figures://provider-capabilities` resource，公開 google/openrouter/openai/ollama 的 generate/edit/verify/multi-turn/mask/structured option capability matrix
+- 已修正 provider config safety：未知 `AFM_IMAGE_PROVIDER` 現在 fail closed，不再靜默 fallback 到 Google
+- 已更新 VS Code extension 設定與 setup/env template 路徑，支援 OpenAI SecretStorage/env-file/process-env profile
+- 0.4.5 release gate 已通過：`uv run pytest` 195 passed、`uv run ruff check .`、`uv run mypy src tests`、VS Code extension lint/compile、`uv run python scripts/package_smoke.py`、`afm-run prepare-image` suffix rewrite smoke
 
 ## Doing
 
-- 以小步重構方式清理架構設計債，目前已完成 route 契約、evaluation port、planner 注入、adapter/container 邊界整理、provider runtime 模組化、verifier runtime 化、review/error/aggregate contract typed 化、啟動/封裝 hardening，以及 code-only publication image preparation
+- 準備 0.4.5 release：版本/CHANGELOG/Memory Bank 與 full validation 已完成，接著分段 commit、annotated tag、push
 
 ## Next
 
-- 下一步優先把 typed contract 往剩餘 host-facing surface 擴：presentation tool docstring/schema 與其他零星 public payload 說明一致性；extension 端等真正開始讀 manifest/detail 或 aggregate payload 時，再把目前固定下來的 review/error/aggregate/publication-image contract 映射成 TS 介面
+- 建立 0.4.5 release commit、annotated tag，並 push main + tag

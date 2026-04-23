@@ -2,7 +2,7 @@
   "name": "academic-figures-mcp",
   "displayName": "Academic Figures MCP",
   "description": "A workflow-first academic figure agent harness for multi-step planning, generation, and evaluation through MCP and VSX, with guided onboarding for non-engineers.",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "publisher": "u9401066",
   "license": "Apache-2.0",
   "icon": "resources/icon.png",

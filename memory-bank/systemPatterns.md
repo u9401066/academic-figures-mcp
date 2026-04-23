@@ -143,3 +143,27 @@ review_summary 的 requirement_met 不再代表任一路徑通過即可，而是
 - src/application/record_host_review.py
 - tests/unit/application/test_manifest_workflows.py
 - tests/unit/application/test_generate_figure.py
+
+
+## Provider capability discovery
+
+Provider differences are exposed through `academic-figures://provider-capabilities` instead of hidden in host logic. Hosts should inspect generate/edit/verify/multi-turn/mask and structured option support before assuming a provider can perform a route.
+
+### Examples
+
+- src/presentation/resources.py
+- src/infrastructure/config.py
+- src/infrastructure/gemini_provider_runtimes.py
+
+
+## Structured provider render hints
+
+Generation should pass render options such as `output_size` through the ImageGenerator/runtime boundary, not only embed them in prompt text. Providers that support structured size parameters, such as OpenAI Images API, can use the hint directly; providers that do not can safely ignore it.
+
+### Examples
+
+- src/domain/interfaces.py
+- src/application/generate_figure.py
+- src/application/replay_manifest.py
+- src/application/retarget_journal.py
+- src/infrastructure/gemini_adapter.py

@@ -22,8 +22,11 @@
 - Preserve the extension timing rule for aggregate payloads too: do not add unused TS runtime interfaces yet; once the extension becomes a direct consumer of manifest/detail or aggregate payloads, map the stabilized review/error/aggregate contract 1:1 into TypeScript interfaces in that same slice.
 - Preserve the new code-only publication image preparation route: `prepare_publication_image` / `afm-run prepare-image` use Pillow only, never image-generation providers, and report `processing_route=code_only_pillow` plus `generation_used=false`.
 - Preserve the DPI semantics: true 600 DPI preparation requires final print size (`width_mm` and/or `height_mm`); without print size the tool writes DPI metadata only and warns rather than claiming extra detail.
-- Prepare the next slice: keep presentation docstring/schema consistency aligned with the now-stabilized review/error/aggregate and publication-image contracts.
+- Preserve the publication-image delivery hardening: unsupported output suffixes are rejected, explicit `output_format` requests produce matching canonical suffixes, directories/unreadable rasters become domain validation errors, and metadata-only warnings report the requested target DPI.
+- Preserve the OpenAI-ready provider path: `AFM_IMAGE_PROVIDER=openai` selects `gpt-image-2` for Images API generation/editing, uses `OPENAI_VISION_MODEL` for Responses API review, and receives `output_size` as a structured provider hint instead of only prompt text.
+- Preserve provider fail-closed behavior: unknown `AFM_IMAGE_PROVIDER` values now raise configuration errors instead of silently falling back to Google.
+- Prepare the 0.4.5 release slice: keep version, changelog, memory bank, tag, and PyPI/VS Code release artifacts aligned.
 
 ## Current Blockers
 
-- No blocker for the completed slices. Remaining complexity is now concentrated in presentation docstring/schema consistency and the future extension-side type mapping once manifest/detail or aggregate payloads are consumed directly.
+- No current blocker. Remaining risk before release is final full-suite/package smoke validation and successful tag push.

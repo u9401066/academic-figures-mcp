@@ -6,6 +6,26 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ## [Unreleased]
 
+## [0.4.5]
+
+### Added in 0.4.5
+
+- Added the code-only `prepare_publication_image` MCP/CLI route for Pillow-based 600 DPI publication delivery without invoking any image-generation provider.
+- Added OpenAI `gpt-image-2` provider support behind `AFM_IMAGE_PROVIDER=openai`, including Images API generation/editing and Responses API vision review configuration.
+- Added `academic-figures://provider-capabilities` so MCP hosts can discover provider support for generation, editing, review, multi-turn editing, and structured render options.
+
+### Changed in 0.4.5
+
+- Forwarded `output_size` as a structured provider hint from generation, replay, and journal-retarget flows so OpenAI Images API calls can receive a concrete `size` parameter.
+- Updated VS Code connection settings, env templates, README guidance, and provider discovery metadata for OpenAI and Ollama profiles.
+
+### Fixed in 0.4.5
+
+- Fixed publication-image output contracts so unsupported output suffixes are rejected and explicit `output_format` requests produce matching canonical suffixes.
+- Fixed publication-image validation so directories and unreadable rasters return domain validation errors instead of raw filesystem/Pillow exceptions.
+- Fixed metadata-only DPI warnings so they report the requested target DPI instead of always saying 600 DPI.
+- Fixed provider configuration safety by rejecting unknown `AFM_IMAGE_PROVIDER` values instead of silently falling back to Google.
+
 ## [0.4.4]
 
 ### Fixed in 0.4.4
