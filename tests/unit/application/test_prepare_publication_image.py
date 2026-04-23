@@ -99,6 +99,13 @@ def test_prepare_publication_image_raises_for_missing_image(tmp_path: Path) -> N
         )
 
 
+def test_prepare_publication_image_raises_for_directory_path(tmp_path: Path) -> None:
+    use_case = PreparePublicationImageUseCase(processor=StubPublicationImageProcessor())
+
+    with pytest.raises(ImageNotFoundError, match="Image not found"):
+        use_case.execute(PreparePublicationImageRequest(image_path=str(tmp_path)))
+
+
 def test_prepare_publication_image_request_rejects_invalid_dpi() -> None:
     with pytest.raises(ValidationError, match="target_dpi"):
         PreparePublicationImageRequest(image_path="figure.png", target_dpi=0)

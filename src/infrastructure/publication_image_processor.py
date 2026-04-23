@@ -48,6 +48,9 @@ class PillowPublicationImageProcessor(PublicationImageProcessor):
         preserve_aspect_ratio: bool = True,
         allow_upscale: bool = True,
     ) -> dict[str, object]:
+        if target_dpi <= 0:
+            raise ValidationError("target_dpi must be positive")
+
         normalized_format = self._resolve_output_format(
             output_format=output_format,
             output_path=output_path,
@@ -57,6 +60,7 @@ class PillowPublicationImageProcessor(PublicationImageProcessor):
             image_path=image_path,
             output_path=output_path,
             output_format=normalized_format,
+            explicit_output_format=output_format is not None,
         )
 
         try:
@@ -64,7 +68,7 @@ class PillowPublicationImageProcessor(PublicationImageProcessor):
                 source = image.copy()
                 original_size = source.size
                 original_dpi = self._read_dpi(image)
-        except UnidentifiedImageError as exc:
+        except (OSError, UnidentifiedImageError) as exc:
             raise ValidationError("image_path must point to a readable raster image") from exc
 
         target_size = self._target_pixel_size(
@@ -90,7 +94,7 @@ class PillowPublicationImageProcessor(PublicationImageProcessor):
         if width_mm is None and height_mm is None:
             warnings.append(
                 "No final print size was provided; preserved pixel dimensions and wrote "
-                "600 DPI metadata only."
+                f"{target_dpi} DPI metadata only."
             )
 
         prepared = source
@@ -176,13 +180,26 @@ class PillowPublicationImageProcessor(PublicationImageProcessor):
         image_path: Path,
         output_path: Path | None,
         output_format: str,
+        explicit_output_format: bool,
     ) -> Path:
         extension = cls._FORMAT_TO_EXTENSION[output_format]
         if output_path is None:
             return image_path.with_name(f"{image_path.stem}_600dpi{extension}")
-        if output_path.suffix:
+        if not output_path.suffix:
+            return output_path.with_suffix(extension)
+
+        suffix_format = cls._EXTENSION_TO_FORMAT.get(output_path.suffix.lower())
+        if suffix_format is None:
+            raise ValidationError(
+                "output_path suffix must be one of: .jpg, .jpeg, .png, .tif, .tiff"
+            )
+        if suffix_format == output_format:
             return output_path
-        return output_path.with_suffix(extension)
+        if explicit_output_format:
+            return output_path.with_suffix(extension)
+        raise ValidationError(
+            "output_path suffix does not match the resolved publication output_format"
+        )
 
     @classmethod
     def _target_pixel_size(

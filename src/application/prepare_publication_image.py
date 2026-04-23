@@ -39,7 +39,7 @@ class PreparePublicationImageUseCase:
 
     def execute(self, req: PreparePublicationImageRequest) -> dict[str, Any]:
         image_path = Path(req.image_path)
-        if not image_path.exists():
+        if not image_path.exists() or not image_path.is_file():
             raise ImageNotFoundError(f"Image not found: {req.image_path}")
 
         output_path = Path(req.output_path) if req.output_path else None

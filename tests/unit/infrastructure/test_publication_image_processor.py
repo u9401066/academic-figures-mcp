@@ -63,6 +63,19 @@ def test_prepare_publication_image_metadata_only_when_print_size_omitted(
         assert round(prepared.info["dpi"][0]) == 600
 
 
+def test_prepare_publication_image_metadata_warning_uses_requested_dpi(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "figure.png"
+    _write_png(image_path, size=(900, 600))
+    processor = PillowPublicationImageProcessor()
+
+    result = processor.prepare(image_path, target_dpi=300, output_format="png")
+
+    warnings = cast("list[str]", result["warnings"])
+    assert any("300 DPI metadata only" in warning for warning in warnings)
+
+
 def test_prepare_publication_image_can_reject_upscaling(tmp_path: Path) -> None:
     image_path = tmp_path / "figure.png"
     _write_png(image_path, size=(600, 400))
@@ -80,3 +93,39 @@ def test_prepare_publication_image_can_reject_upscaling(tmp_path: Path) -> None:
 def test_prepare_publication_image_rejects_unsupported_output_format() -> None:
     with pytest.raises(ValidationError, match="publication output_format"):
         PillowPublicationImageProcessor.normalize_output_format("gif")
+
+
+def test_prepare_publication_image_rewrites_suffix_for_explicit_output_format(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "figure.png"
+    output_path = tmp_path / "prepared.png"
+    _write_png(image_path)
+    processor = PillowPublicationImageProcessor()
+
+    result = processor.prepare(
+        image_path,
+        output_path=output_path,
+        output_format="tiff",
+    )
+
+    assert result["output_path"] == str(tmp_path / "prepared.tif")
+    assert result["output_format"] == "tiff"
+
+
+def test_prepare_publication_image_rejects_unsupported_output_path_suffix(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "figure.png"
+    _write_png(image_path)
+    processor = PillowPublicationImageProcessor()
+
+    with pytest.raises(ValidationError, match="output_path suffix"):
+        processor.prepare(image_path, output_path=tmp_path / "prepared.pdf")
+
+
+def test_prepare_publication_image_wraps_unreadable_paths(tmp_path: Path) -> None:
+    processor = PillowPublicationImageProcessor()
+
+    with pytest.raises(ValidationError, match="readable raster image"):
+        processor.prepare(tmp_path)
