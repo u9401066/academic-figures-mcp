@@ -132,7 +132,7 @@ class PlanFigureUseCase:
                 "structured SVG figure briefs instead of direct bitmap output."
             )
             warnings.append(
-                "Switch to Google or OpenRouter if you need bitmap image generation "
+                "Switch to Google, OpenRouter, or OpenAI if you need bitmap image generation "
                 "or image editing."
             )
 

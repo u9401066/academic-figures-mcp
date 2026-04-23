@@ -3,6 +3,7 @@ import * as path from "path";
 
 export const GOOGLE_PROVIDER = "google";
 export const OPENROUTER_PROVIDER = "openrouter";
+export const OPENAI_PROVIDER = "openai";
 export const OLLAMA_PROVIDER = "ollama";
 
 export const SECRET_STORAGE_SOURCE = "secretStorage";
@@ -14,12 +15,16 @@ export const DEFAULT_OPENROUTER_MODEL = "google/gemini-3.1-flash-image-preview";
 export const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const DEFAULT_OPENROUTER_REFERER = "https://github.com/u9401066/academic-figures-mcp";
 export const DEFAULT_OPENROUTER_TITLE = "Academic Figures MCP";
+export const DEFAULT_OPENAI_MODEL = "gpt-image-2";
+export const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+export const DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4-mini";
+export const DEFAULT_OPENAI_IMAGE_SIZE = "auto";
 export const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1";
 export const DEFAULT_OLLAMA_MODEL = "llava:latest";
 export const DEFAULT_ENVIRONMENT_FILE = ".vscode/academic-figures.env";
 
 export function getSupportedImageProvider(provider: string): string {
-  if (provider === OPENROUTER_PROVIDER || provider === OLLAMA_PROVIDER) {
+  if (provider === OPENROUTER_PROVIDER || provider === OPENAI_PROVIDER || provider === OLLAMA_PROVIDER) {
     return provider;
   }
   return GOOGLE_PROVIDER;
@@ -28,6 +33,9 @@ export function getSupportedImageProvider(provider: string): string {
 export function getApiKeyEnvName(provider: string): string {
   if (provider === OPENROUTER_PROVIDER) {
     return "OPENROUTER_API_KEY";
+  }
+  if (provider === OPENAI_PROVIDER) {
+    return "OPENAI_API_KEY";
   }
   if (provider === OLLAMA_PROVIDER) {
     return "OLLAMA_BASE_URL / OLLAMA_MODEL";

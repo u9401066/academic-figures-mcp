@@ -7,6 +7,7 @@ import {
   AcademicFiguresMcpProvider,
   type AcademicFiguresRuntimeSpec,
   GOOGLE_API_KEY_SECRET,
+  OPENAI_API_KEY_SECRET,
   OPENROUTER_API_KEY_SECRET,
 } from "./mcpProvider";
 import {
@@ -14,6 +15,10 @@ import {
   DEFAULT_GOOGLE_MODEL,
   DEFAULT_OLLAMA_BASE_URL,
   DEFAULT_OLLAMA_MODEL,
+  DEFAULT_OPENAI_BASE_URL,
+  DEFAULT_OPENAI_IMAGE_SIZE,
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_VISION_MODEL,
   DEFAULT_OPENROUTER_BASE_URL,
   DEFAULT_OPENROUTER_MODEL,
   DEFAULT_OPENROUTER_REFERER,
@@ -21,6 +26,7 @@ import {
   ENV_FILE_SOURCE,
   GOOGLE_PROVIDER,
   OLLAMA_PROVIDER,
+  OPENAI_PROVIDER,
   OPENROUTER_PROVIDER,
   PROCESS_ENV_SOURCE,
   SECRET_STORAGE_SOURCE,
@@ -63,14 +69,16 @@ type CommandDeps = {
 type ConnectionActionId =
   | "googleSecret"
   | "openrouterSecret"
+  | "openaiSecret"
   | "envFile"
   | "processEnv"
   | "openrouterSettings"
+  | "openaiSettings"
   | "ollamaSettings"
   | "envTemplate";
 
 type ConnectionAction = vscode.QuickPickItem & { id: ConnectionActionId };
-type EnvironmentTemplateKind = "google" | "openrouter" | "ollama";
+type EnvironmentTemplateKind = "google" | "openrouter" | "openai" | "ollama";
 type DirectRunCommand = "plan" | "generate" | "evaluate" | "transform";
 type DirectRunResult = Record<string, unknown>;
 
@@ -871,13 +879,17 @@ async function buildStatusHtml(
   const environmentFileExists = fs.existsSync(environmentFilePath);
   const googleSecretConfigured = Boolean(await context.secrets.get(GOOGLE_API_KEY_SECRET));
   const openRouterSecretConfigured = Boolean(await context.secrets.get(OPENROUTER_API_KEY_SECRET));
+  const openAiSecretConfigured = Boolean(await context.secrets.get(OPENAI_API_KEY_SECRET));
   const googleProcessConfigured = Boolean(process.env.GOOGLE_API_KEY);
   const openRouterProcessConfigured = Boolean(process.env.OPENROUTER_API_KEY);
+  const openAiProcessConfigured = Boolean(process.env.OPENAI_API_KEY);
   const localSource = Boolean(workspaceRoot && fs.existsSync(path.join(workspaceRoot, "src", "presentation", "server.py")));
   const unsafeEnvFile = Boolean(workspaceRoot && fs.existsSync(path.join(workspaceRoot, "env")));
   const activeModel =
     currentProvider === OPENROUTER_PROVIDER
       ? config.get<string>("openRouterModel", DEFAULT_OPENROUTER_MODEL)
+      : currentProvider === OPENAI_PROVIDER
+        ? config.get<string>("openAiModel", DEFAULT_OPENAI_MODEL)
       : currentProvider === OLLAMA_PROVIDER
         ? config.get<string>("ollamaModel", DEFAULT_OLLAMA_MODEL)
       : config.get<string>("googleModel", DEFAULT_GOOGLE_MODEL);
@@ -911,9 +923,19 @@ async function buildStatusHtml(
       }),
     ],
     [
+      "OPENAI_API_KEY",
+      describeAvailability(credentialSource, {
+        secret: openAiSecretConfigured,
+        envFile: Boolean(environmentValues.OPENAI_API_KEY),
+        processEnv: openAiProcessConfigured,
+      }),
+    ],
+    [
       "OpenRouter Base URL",
       config.get<string>("openRouterBaseUrl", DEFAULT_OPENROUTER_BASE_URL),
     ],
+    ["OpenAI Base URL", config.get<string>("openAiBaseUrl", DEFAULT_OPENAI_BASE_URL)],
+    ["OpenAI Vision Model", config.get<string>("openAiVisionModel", DEFAULT_OPENAI_VISION_MODEL)],
     ["Ollama Base URL", config.get<string>("ollamaBaseUrl", DEFAULT_OLLAMA_BASE_URL)],
     ["Ollama Model", config.get<string>("ollamaModel", DEFAULT_OLLAMA_MODEL)],
     ["Plaintext env file", unsafeEnvFile ? "Warning: env file detected in repo root" : "Not detected"],
@@ -1032,6 +1054,12 @@ async function updateApiKeyContext(context: vscode.ExtensionContext): Promise<vo
       : credentialSource === ENV_FILE_SOURCE
         ? Boolean(environmentValues.OPENROUTER_API_KEY)
         : Boolean(process.env.OPENROUTER_API_KEY);
+  const openAiConfigured =
+    credentialSource === SECRET_STORAGE_SOURCE
+      ? Boolean(await context.secrets.get(OPENAI_API_KEY_SECRET))
+      : credentialSource === ENV_FILE_SOURCE
+        ? Boolean(environmentValues.OPENAI_API_KEY)
+        : Boolean(process.env.OPENAI_API_KEY);
   const config = vscode.workspace.getConfiguration("academicFiguresMcp");
   const ollamaConfigured =
     credentialSource === ENV_FILE_SOURCE
@@ -1044,6 +1072,8 @@ async function updateApiKeyContext(context: vscode.ExtensionContext): Promise<vo
   const activeConfigured =
     getCurrentImageProvider() === OPENROUTER_PROVIDER
       ? openRouterConfigured
+      : getCurrentImageProvider() === OPENAI_PROVIDER
+        ? openAiConfigured
       : getCurrentImageProvider() === OLLAMA_PROVIDER
         ? ollamaConfigured
         : googleConfigured;
@@ -1053,6 +1083,11 @@ async function updateApiKeyContext(context: vscode.ExtensionContext): Promise<vo
     "setContext",
     "academicFiguresMcp.openRouterApiKeyConfigured",
     openRouterConfigured,
+  );
+  await vscode.commands.executeCommand(
+    "setContext",
+    "academicFiguresMcp.openAiApiKeyConfigured",
+    openAiConfigured,
   );
   await vscode.commands.executeCommand(
     "setContext",
@@ -1080,7 +1115,13 @@ function getCurrentImageProvider(): string {
 }
 
 function getSecretNameForProvider(provider: string): string {
-  return provider === OPENROUTER_PROVIDER ? OPENROUTER_API_KEY_SECRET : GOOGLE_API_KEY_SECRET;
+  if (provider === OPENROUTER_PROVIDER) {
+    return OPENROUTER_API_KEY_SECRET;
+  }
+  if (provider === OPENAI_PROVIDER) {
+    return OPENAI_API_KEY_SECRET;
+  }
+  return GOOGLE_API_KEY_SECRET;
 }
 
 function getApiKeyLabel(provider: string): string {
@@ -1133,7 +1174,13 @@ async function updateImageProviderSetting(provider: string): Promise<void> {
 
 async function pickImageProvider(
   placeHolder?: string,
-): Promise<typeof GOOGLE_PROVIDER | typeof OPENROUTER_PROVIDER | typeof OLLAMA_PROVIDER | undefined> {
+): Promise<
+  | typeof GOOGLE_PROVIDER
+  | typeof OPENROUTER_PROVIDER
+  | typeof OPENAI_PROVIDER
+  | typeof OLLAMA_PROVIDER
+  | undefined
+> {
   const currentProvider = getCurrentImageProvider();
   const picked = await vscode.window.showQuickPick(
     [
@@ -1148,6 +1195,11 @@ async function pickImageProvider(
         detail: `Use OPENROUTER_API_KEY with ${DEFAULT_OPENROUTER_MODEL}`,
       },
       {
+        label: OPENAI_PROVIDER,
+        description: "OpenAI Images API",
+        detail: `Use OPENAI_API_KEY with ${DEFAULT_OPENAI_MODEL}`,
+      },
+      {
         label: OLLAMA_PROVIDER,
         description: "Local Ollama runtime",
         detail: `Use ${DEFAULT_OLLAMA_MODEL} at ${DEFAULT_OLLAMA_BASE_URL}`,
@@ -1157,7 +1209,12 @@ async function pickImageProvider(
       placeHolder: placeHolder ?? `Choose image provider (current: ${currentProvider})`,
     },
   );
-  return picked?.label as typeof GOOGLE_PROVIDER | typeof OPENROUTER_PROVIDER | typeof OLLAMA_PROVIDER | undefined;
+  return picked?.label as
+    | typeof GOOGLE_PROVIDER
+    | typeof OPENROUTER_PROVIDER
+    | typeof OPENAI_PROVIDER
+    | typeof OLLAMA_PROVIDER
+    | undefined;
 }
 
 async function showConnectionMenu(
@@ -1180,6 +1237,12 @@ async function showConnectionMenu(
       detail: `Provider: ${OPENROUTER_PROVIDER} | Model: ${DEFAULT_OPENROUTER_MODEL}`,
     },
     {
+      id: "openaiSecret",
+      label: "$(key) Store OpenAI key",
+      description: "Use SecretStorage for OPENAI_API_KEY",
+      detail: `Provider: ${OPENAI_PROVIDER} | Model: ${DEFAULT_OPENAI_MODEL}`,
+    },
+    {
       id: "envFile",
       label: "$(file-code) Use environment file",
       description: "Paste or browse to an env file path",
@@ -1188,12 +1251,12 @@ async function showConnectionMenu(
     {
       id: "processEnv",
       label: "$(terminal) Use process environment",
-      description: "Read GOOGLE_API_KEY or OPENROUTER_API_KEY from the current shell",
+      description: "Read provider credentials from the current shell",
     },
     {
       id: "envTemplate",
       label: "$(new-file) Create env template",
-      description: "Generate a Google, OpenRouter, or Ollama profile file",
+      description: "Generate a Google, OpenRouter, OpenAI, or Ollama profile file",
     },
   ];
 
@@ -1203,6 +1266,11 @@ async function showConnectionMenu(
         id: "openrouterSettings",
         label: "$(globe) Configure OpenRouter endpoint",
         description: "Base URL, model, referer, and title",
+      },
+      {
+        id: "openaiSettings",
+        label: "$(sparkle) Configure OpenAI image profile",
+        description: "Base URL, image model, vision model, and size",
       },
       {
         id: "ollamaSettings",
@@ -1224,6 +1292,9 @@ async function showConnectionMenu(
   if (picked.id === "openrouterSecret") {
     return configureSecretStorageProvider(context, deps, OPENROUTER_PROVIDER);
   }
+  if (picked.id === "openaiSecret") {
+    return configureSecretStorageProvider(context, deps, OPENAI_PROVIDER);
+  }
   if (picked.id === "envFile") {
     return configureEnvironmentFileSource(context, deps);
   }
@@ -1235,6 +1306,9 @@ async function showConnectionMenu(
   }
   if (picked.id === "openrouterSettings") {
     return configureOpenRouterSettings(deps);
+  }
+  if (picked.id === "openaiSettings") {
+    return configureOpenAiSettings(deps);
   }
   return configureOllamaSettings(deps);
 }
@@ -1415,6 +1489,70 @@ async function configureOpenRouterSettings(deps: CommandDeps): Promise<boolean> 
   return true;
 }
 
+async function configureOpenAiSettings(deps: CommandDeps): Promise<boolean> {
+  const config = vscode.workspace.getConfiguration("academicFiguresMcp");
+  const baseUrl = await vscode.window.showInputBox({
+    ignoreFocusOut: true,
+    prompt: "OpenAI API base URL",
+    value: config.get<string>("openAiBaseUrl", DEFAULT_OPENAI_BASE_URL),
+  });
+  if (baseUrl === undefined) {
+    return false;
+  }
+
+  const imageModel = await vscode.window.showInputBox({
+    ignoreFocusOut: true,
+    prompt: "OpenAI image model",
+    value: config.get<string>("openAiModel", DEFAULT_OPENAI_MODEL),
+  });
+  if (imageModel === undefined) {
+    return false;
+  }
+
+  const visionModel = await vscode.window.showInputBox({
+    ignoreFocusOut: true,
+    prompt: "OpenAI vision review model",
+    value: config.get<string>("openAiVisionModel", DEFAULT_OPENAI_VISION_MODEL),
+  });
+  if (visionModel === undefined) {
+    return false;
+  }
+
+  const imageSize = await vscode.window.showInputBox({
+    ignoreFocusOut: true,
+    prompt: "OpenAI Images API size hint",
+    value: config.get<string>("openAiImageSize", DEFAULT_OPENAI_IMAGE_SIZE),
+  });
+  if (imageSize === undefined) {
+    return false;
+  }
+
+  const target = getConfigurationTarget();
+  await config.update("openAiBaseUrl", baseUrl.trim() || DEFAULT_OPENAI_BASE_URL, target);
+  await config.update("openAiModel", imageModel.trim() || DEFAULT_OPENAI_MODEL, target);
+  await config.update("openAiVisionModel", visionModel.trim() || DEFAULT_OPENAI_VISION_MODEL, target);
+  await config.update("openAiImageSize", imageSize.trim() || DEFAULT_OPENAI_IMAGE_SIZE, target);
+  const activate = await vscode.window.showQuickPick(
+    [
+      {
+        label: "$(plug) Use OpenAI now",
+        description: "Switch the active provider to OpenAI Images API",
+      },
+      {
+        label: "$(check) Save settings only",
+        description: "Keep the current provider unchanged",
+      },
+    ],
+    { placeHolder: "Apply the updated OpenAI profile now?" },
+  );
+  if (activate?.label.includes("Use OpenAI now")) {
+    await updateImageProviderSetting(OPENAI_PROVIDER);
+  }
+  deps.mcpProvider.refresh();
+  vscode.window.showInformationMessage("OpenAI image profile updated.");
+  return true;
+}
+
 async function configureOllamaSettings(deps: CommandDeps): Promise<boolean> {
   const config = vscode.workspace.getConfiguration("academicFiguresMcp");
   const baseUrl = await vscode.window.showInputBox({
@@ -1550,6 +1688,10 @@ async function pickEnvironmentTemplateKind(): Promise<EnvironmentTemplateKind | 
         description: "OPENROUTER_API_KEY + OpenRouter headers",
       },
       {
+        label: OPENAI_PROVIDER,
+        description: "OPENAI_API_KEY + OpenAI Images API settings",
+      },
+      {
         label: OLLAMA_PROVIDER,
         description: "Store local OpenAI-compatible endpoint settings",
       },
@@ -1619,6 +1761,19 @@ function buildEnvironmentTemplate(kind: EnvironmentTemplateKind, apiKey: string)
       `OPENROUTER_HTTP_REFERER=${config.get<string>("openRouterReferer", DEFAULT_OPENROUTER_REFERER)}`,
       `OPENROUTER_APP_TITLE=${config.get<string>("openRouterTitle", DEFAULT_OPENROUTER_TITLE)}`,
       `GEMINI_MODEL=${config.get<string>("openRouterModel", DEFAULT_OPENROUTER_MODEL)}`,
+      "",
+    ].join("\n");
+  }
+
+  if (kind === OPENAI_PROVIDER) {
+    return [
+      "# Academic Figures MCP environment profile",
+      `AFM_IMAGE_PROVIDER=${OPENAI_PROVIDER}`,
+      `OPENAI_API_KEY=${apiKey}`,
+      `OPENAI_IMAGE_MODEL=${config.get<string>("openAiModel", DEFAULT_OPENAI_MODEL)}`,
+      `OPENAI_BASE_URL=${config.get<string>("openAiBaseUrl", DEFAULT_OPENAI_BASE_URL)}`,
+      `OPENAI_VISION_MODEL=${config.get<string>("openAiVisionModel", DEFAULT_OPENAI_VISION_MODEL)}`,
+      `OPENAI_IMAGE_SIZE=${config.get<string>("openAiImageSize", DEFAULT_OPENAI_IMAGE_SIZE)}`,
       "",
     ].join("\n");
   }

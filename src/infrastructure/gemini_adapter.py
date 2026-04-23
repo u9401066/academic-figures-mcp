@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import re
 import time
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import httpx
 from google import genai
@@ -18,7 +19,7 @@ from src.domain.value_objects import (
     QUALITY_GATE_MIN_TOTAL,
     QualityVerdict,
 )
-from src.infrastructure.config import OLLAMA_PROVIDER, OPENROUTER_PROVIDER
+from src.infrastructure.config import OLLAMA_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER
 from src.infrastructure.gemini_provider_runtimes import (
     ProviderFailure,
     ProviderFailureKind,
@@ -99,6 +100,45 @@ class _GeminiProviderSupport:
                 message="Provider returned non-object JSON payload",
             )
         return data, None
+
+    def _request_multipart_with_retry(
+        self,
+        *,
+        endpoint: str,
+        headers: dict[str, str],
+        data: dict[str, str],
+        files: list[tuple[str, tuple[str, bytes, str]]],
+    ) -> tuple[dict[str, object] | None, ProviderFailure | None]:
+        response, failure = self._call_with_retry(
+            lambda: httpx.post(
+                endpoint,
+                headers=headers,
+                data=data,
+                files=cast("Any", files),
+                timeout=self._config.request_timeout_seconds,
+            )
+        )
+        if failure is not None or response is None:
+            return None, failure
+
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            return None, self._failure_from_http_status(exc)
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            return None, ProviderFailure(
+                kind=ProviderFailureKind.INVALID_RESPONSE,
+                message=str(exc),
+            )
+        if not isinstance(payload, dict):
+            return None, ProviderFailure(
+                kind=ProviderFailureKind.INVALID_RESPONSE,
+                message="Provider returned non-object JSON payload",
+            )
+        return payload, None
 
     def _call_with_retry(
         self,
@@ -186,6 +226,8 @@ class _GeminiProviderSupport:
     def _provider_default_model(self, provider: str) -> str:
         if provider == OPENROUTER_PROVIDER:
             return "google/gemini-3.1-flash-image-preview"
+        if provider == OPENAI_PROVIDER:
+            return "gpt-image-2"
         if provider == OLLAMA_PROVIDER:
             return self._config.ollama_model
         return "gemini-3.1-flash-image-preview"
@@ -193,6 +235,8 @@ class _GeminiProviderSupport:
     def _provider_high_fidelity_model(self, provider: str) -> str:
         if provider == OPENROUTER_PROVIDER:
             return "google/gemini-3-pro-image-preview"
+        if provider == OPENAI_PROVIDER:
+            return "gpt-image-2"
         if provider == OLLAMA_PROVIDER:
             return self._config.ollama_model
         return "gemini-3-pro-image-preview"
@@ -200,6 +244,8 @@ class _GeminiProviderSupport:
     def _provider_low_latency_model(self, provider: str) -> str:
         if provider == OPENROUTER_PROVIDER:
             return "google/gemini-2.5-flash-image"
+        if provider == OPENAI_PROVIDER:
+            return "gpt-image-2"
         if provider == OLLAMA_PROVIDER:
             return self._config.ollama_model
         return "gemini-2.5-flash-image"
@@ -221,6 +267,22 @@ class _GeminiProviderSupport:
             return base_url
         return f"{base_url}/chat/completions"
 
+    def _openai_images_generation_endpoint(self) -> str:
+        return self._openai_endpoint("images/generations")
+
+    def _openai_images_edit_endpoint(self) -> str:
+        return self._openai_endpoint("images/edits")
+
+    def _openai_responses_endpoint(self) -> str:
+        return self._openai_endpoint("responses")
+
+    def _openai_endpoint(self, path: str) -> str:
+        base_url = self._config.openai_base_url.rstrip("/")
+        normalized_path = path.lstrip("/")
+        if base_url.endswith(f"/{normalized_path}"):
+            return base_url
+        return f"{base_url}/{normalized_path}"
+
     def _openrouter_headers(self) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {self._config.api_key}",
@@ -230,6 +292,12 @@ class _GeminiProviderSupport:
             headers["HTTP-Referer"] = self._config.openrouter_http_referer
         if self._config.openrouter_app_title:
             headers["X-OpenRouter-Title"] = self._config.openrouter_app_title
+        return headers
+
+    def _openai_headers(self, *, json_content_type: bool = True) -> dict[str, str]:
+        headers = {"Authorization": f"Bearer {self._config.api_key}"}
+        if json_content_type:
+            headers["Content-Type"] = "application/json"
         return headers
 
     def _openrouter_image_config(self, aspect_ratio: str) -> dict[str, str]:
@@ -244,6 +312,41 @@ class _GeminiProviderSupport:
         image_size = self._config.default_image_size.strip()
         return image_size if image_size in valid else None
 
+    def _openai_image_options(
+        self,
+        *,
+        output_size: str | None = None,
+    ) -> dict[str, str]:
+        size = self._normalize_openai_image_size(output_size or self._config.openai_image_size)
+        quality = self._normalize_openai_option(
+            self._config.openai_quality,
+            {"auto", "low", "medium", "high"},
+            default="auto",
+        )
+        background = self._normalize_openai_option(
+            self._config.openai_background,
+            {"auto", "opaque", "transparent"},
+            default="auto",
+        )
+        output_format = self._normalize_openai_option(
+            self._config.openai_output_format,
+            {"png", "jpeg", "jpg", "webp"},
+            default="png",
+        )
+        if output_format == "jpg":
+            output_format = "jpeg"
+        if output_format == "jpeg" and background == "transparent":
+            background = "auto"
+        return {
+            "size": size,
+            "quality": quality,
+            "background": background,
+            "output_format": output_format,
+        }
+
+    def _openai_vision_model(self) -> str:
+        return self._config.openai_vision_model.strip() or "gpt-5.4-mini"
+
     def _normalize_openrouter_image_size(self, value: str) -> str | None:
         aliases = {
             "0.5k": "0.5K",
@@ -257,6 +360,29 @@ class _GeminiProviderSupport:
             "4096": "4K",
         }
         return aliases.get(value.strip().lower())
+
+    def _normalize_openai_image_size(self, value: str) -> str:
+        normalized = value.strip().lower()
+        if not normalized or normalized == "auto":
+            return "auto"
+        match = re.match(r"^(\d{2,5})x(\d{2,5})$", normalized)
+        if match is None:
+            return "auto"
+        width = int(match.group(1))
+        height = int(match.group(2))
+        if width <= 0 or height <= 0 or max(width, height) > 3840:
+            return "auto"
+        return f"{width}x{height}"
+
+    @staticmethod
+    def _normalize_openai_option(
+        value: str,
+        allowed: set[str],
+        *,
+        default: str,
+    ) -> str:
+        normalized = value.strip().lower()
+        return normalized if normalized in allowed else default
 
     def _result_from_failure(
         self,
@@ -333,6 +459,7 @@ class GeminiFallbackRouter(_GeminiProviderSupport):
         *,
         prompt: str,
         aspect_ratio: str,
+        output_size: str | None,
         failure: ProviderFailure,
     ) -> GenerationResult | None:
         fallback_config = self._fallback_config_for(failure)
@@ -341,6 +468,7 @@ class GeminiFallbackRouter(_GeminiProviderSupport):
         return GeminiGenerationAdapter(fallback_config).generate(
             prompt=prompt,
             aspect_ratio=aspect_ratio,
+            output_size=output_size,
         )
 
     def maybe_edit(
@@ -383,6 +511,7 @@ class GeminiGenerationAdapter(_GeminiProviderSupport):
         *,
         model: str | None = None,
         aspect_ratio: str | None = None,
+        output_size: str | None = None,
     ) -> GenerationResult:
         model_name = self._resolve_model_name(model)
         ar = aspect_ratio or self._config.default_aspect_ratio
@@ -391,6 +520,7 @@ class GeminiGenerationAdapter(_GeminiProviderSupport):
             prompt=prompt,
             model_name=model_name,
             aspect_ratio=ar,
+            output_size=output_size,
             start=start,
         )
         if outcome.result is not None:
@@ -403,6 +533,7 @@ class GeminiGenerationAdapter(_GeminiProviderSupport):
         fallback = self._fallback_router.maybe_generate(
             prompt=prompt,
             aspect_ratio=ar,
+            output_size=output_size,
             failure=failure,
         )
         if fallback is not None:
@@ -506,8 +637,14 @@ class GeminiAdapter(ImageGenerator):
         *,
         model: str | None = None,
         aspect_ratio: str | None = None,
+        output_size: str | None = None,
     ) -> GenerationResult:
-        return self._generation.generate(prompt, model=model, aspect_ratio=aspect_ratio)
+        return self._generation.generate(
+            prompt,
+            model=model,
+            aspect_ratio=aspect_ratio,
+            output_size=output_size,
+        )
 
     def edit(
         self,

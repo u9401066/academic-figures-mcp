@@ -52,6 +52,13 @@ def inventory_resource() -> str:
                     "provider_env": "AFM_IMAGE_PROVIDER=openrouter",
                     "default_model": "google/gemini-3.1-flash-image-preview",
                 },
+                "openai": {
+                    "api_key_env": "OPENAI_API_KEY",
+                    "provider_env": "AFM_IMAGE_PROVIDER=openai",
+                    "default_model": "gpt-image-2",
+                    "vision_review_model_env": "OPENAI_VISION_MODEL",
+                    "route": "OpenAI Images API generation/editing + Responses API vision review",
+                },
                 "ollama": {
                     "api_key_env": None,
                     "provider_env": "AFM_IMAGE_PROVIDER=ollama",
@@ -169,6 +176,7 @@ def inventory_resource() -> str:
             "resources": [
                 "academic-figures://inventory",
                 "academic-figures://gemini-image-baseline",
+                "academic-figures://provider-capabilities",
                 "academic-figures://renderer-ecosystem",
             ],
             "prompts": [
@@ -187,6 +195,101 @@ def inventory_resource() -> str:
                 "Excalidraw",
                 "tldraw",
             ],
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
+
+
+@mcp.resource("academic-figures://provider-capabilities")
+def provider_capabilities_resource() -> str:
+    """Provider capability matrix for MCP hosts and extension discovery."""
+    return json.dumps(
+        {
+            "schema_version": "1.0",
+            "provider_env": "AFM_IMAGE_PROVIDER",
+            "providers": {
+                "google": {
+                    "generate": True,
+                    "edit": True,
+                    "verify": True,
+                    "multi_turn_edit": True,
+                    "mask_edit": False,
+                    "structured_options": {
+                        "aspect_ratio": True,
+                        "output_size": False,
+                        "quality": False,
+                        "background": False,
+                        "output_format": "postprocess",
+                    },
+                    "default_model": "gemini-3.1-flash-image-preview",
+                },
+                "openrouter": {
+                    "generate": True,
+                    "edit": True,
+                    "verify": True,
+                    "multi_turn_edit": False,
+                    "mask_edit": False,
+                    "structured_options": {
+                        "aspect_ratio": True,
+                        "output_size": False,
+                        "quality": False,
+                        "background": False,
+                        "output_format": "postprocess",
+                    },
+                    "default_model": "google/gemini-3.1-flash-image-preview",
+                },
+                "openai": {
+                    "generate": True,
+                    "edit": True,
+                    "verify": True,
+                    "multi_turn_edit": False,
+                    "mask_edit": "api_supported_not_exposed_as_mcp_argument",
+                    "structured_options": {
+                        "aspect_ratio": False,
+                        "output_size": True,
+                        "quality": "OPENAI_IMAGE_QUALITY",
+                        "background": "OPENAI_IMAGE_BACKGROUND",
+                        "output_format": "OPENAI_IMAGE_OUTPUT_FORMAT",
+                    },
+                    "default_model": "gpt-image-2",
+                    "image_model_env": "OPENAI_IMAGE_MODEL",
+                    "vision_model_env": "OPENAI_VISION_MODEL",
+                    "api_key_env": "OPENAI_API_KEY",
+                    "endpoints": [
+                        "POST /v1/images/generations",
+                        "POST /v1/images/edits",
+                        "POST /v1/responses",
+                    ],
+                },
+                "ollama": {
+                    "generate": "local_svg_brief",
+                    "edit": False,
+                    "verify": True,
+                    "multi_turn_edit": False,
+                    "mask_edit": False,
+                    "structured_options": {
+                        "aspect_ratio": "prompt_to_svg_canvas",
+                        "output_size": "prompt_to_svg_canvas",
+                        "quality": False,
+                        "background": False,
+                        "output_format": "svg_or_postprocess",
+                    },
+                    "default_model": "llava:latest",
+                },
+            },
+            "planned_payload_contract": {
+                "schema_version": "planned_payload_v1",
+                "required_for_generate": ["render_route", "title_or_asset_kind"],
+                "provider_forwarded_fields": ["output_size", "output_format", "model"],
+                "notes": [
+                    "output_size is forwarded as a structured provider hint when supported.",
+                    (
+                        "output_format still uses post-generation conversion except for "
+                        "OpenAI image output."
+                    ),
+                ],
+            },
         },
         indent=2,
         ensure_ascii=False,

@@ -49,7 +49,10 @@ class ReplayManifestUseCase:
 
     def execute(self, req: ReplayManifestRequest) -> dict[str, Any]:
         manifest = self._manifest_store.load(req.manifest_id)
-        result: GenerationResult = self._generator.generate(prompt=manifest.prompt)
+        result: GenerationResult = self._generator.generate(
+            prompt=manifest.prompt,
+            output_size=manifest.output_size,
+        )
 
         if not result.ok:
             error_payload: dict[str, Any] = {

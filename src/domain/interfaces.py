@@ -32,6 +32,7 @@ class ImageGenerator(Protocol):
         *,
         model: str | None = None,
         aspect_ratio: str | None = None,
+        output_size: str | None = None,
     ) -> GenerationResult: ...
 
     def edit(

@@ -44,7 +44,7 @@ It now includes a YAML-backed journal registry so the MCP layer can inject figur
 This server targets the modern MCP Python SDK line and is intended to expose:
 
 - 14 MCP tools for planning, generation, editing, code-only publication image preparation, evaluation, review write-back, manifest inspection, replay, retargeting, verification, and multi-step refinement workflows
-- resources for discovery of presets, templates, and Gemini image defaults
+- resources for discovery of presets, templates, provider capabilities, and image defaults
 - reusable prompts for figure planning and style transformation
 
 ## Harness Flow
@@ -65,7 +65,7 @@ The system is designed as a multi-step academic workflow:
 | ---- | ----- | ------ |
 | `plan_figure` | `pmid` or `source_title`, plus `source_kind?`, `source_summary?`, `source_identifier?`, `output_format?`, `figure_type?`, `style_preset?` | Structured plan with route, constraints, and next-step arguments |
 | `generate_figure` | `planned_payload` or a direct source input (`pmid` / `source_title`), plus `output_format?` | Single high-level draw entrypoint with optional internal planning and raster format conversion |
-| `edit_figure` | `image_path`, `feedback`, `output_format?` | Refined image via Gemini edit API with optional internal raster format conversion |
+| `edit_figure` | `image_path`, `feedback`, `output_format?` | Refined image via the active provider edit API with optional internal raster format conversion |
 | `prepare_publication_image` | `image_path`, `target_dpi?`, `width_mm?`, `height_mm?`, `output_format?`, `output_path?` | Pure-code Pillow resize/DPI metadata pass for 600 DPI publication delivery; no generation provider is used |
 | `evaluate_figure` | `image_path`, `figure_type?` | 8-domain scorecard with suggestions |
 | `batch_generate` | `pmids: list`, `figure_type?` | Batch generation results |
@@ -182,7 +182,8 @@ git clone https://github.com/u9401066/academic-figures-mcp.git
 cd academic-figures-mcp
 uv sync
 # then copy env.example to env and fill one provider key,
-# or provide GOOGLE_API_KEY / OPENROUTER_API_KEY through your shell or MCP host config
+# or provide GOOGLE_API_KEY / OPENROUTER_API_KEY / OPENAI_API_KEY
+# through your shell or MCP host config
 ```
 
 ## Local Env File
@@ -199,6 +200,7 @@ Provider examples:
 
 - `AFM_IMAGE_PROVIDER=google` with `GOOGLE_API_KEY`
 - `AFM_IMAGE_PROVIDER=openrouter` with `OPENROUTER_API_KEY`
+- `AFM_IMAGE_PROVIDER=openai` with `OPENAI_API_KEY` for `gpt-image-2`
 - `AFM_IMAGE_PROVIDER=ollama` with `OLLAMA_BASE_URL` and `OLLAMA_MODEL`
 - `AFM_MANIFEST_DIR=.academic-figures/manifests` to relocate persisted generation manifests
 
@@ -448,7 +450,9 @@ uv sync
 uv run python -m src.presentation.server
 ```
 
-The planned Gemini image integration follows the current Google Gen AI SDK pattern:
+Provider-backed image generation can run through Google Gemini, OpenRouter, OpenAI
+`gpt-image-2`, or local Ollama SVG brief rendering. The Google path follows the current
+Google Gen AI SDK pattern:
 
 ```python
 from google import genai

@@ -55,17 +55,18 @@ If you skip the wizard, open the Academic Figures activity bar and click the key
 | ------- | --- | ------------- |
 | Google | `GOOGLE_API_KEY` | `gemini-3.1-flash-image-preview` |
 | OpenRouter | `OPENROUTER_API_KEY` | `google/gemini-3.1-flash-image-preview` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-image-2` |
 | Ollama | none required | `llava:latest` |
 
 ## Connection Sources
 
 | Source | What it does |
 | ------ | ------------ |
-| SecretStorage | Stores `GOOGLE_API_KEY` or `OPENROUTER_API_KEY` in VS Code SecretStorage |
+| SecretStorage | Stores `GOOGLE_API_KEY`, `OPENROUTER_API_KEY`, or `OPENAI_API_KEY` in VS Code SecretStorage |
 | Env File | Loads a workspace-relative or absolute env file such as `.vscode/academic-figures.env` |
 | Process Env | Reads the active shell environment when the MCP server is launched |
 
-The extension can also run the backend with `AFM_IMAGE_PROVIDER=ollama`, which currently enables local SVG brief generation and vision-based evaluation.
+The extension can also run the backend with `AFM_IMAGE_PROVIDER=openai` for OpenAI Images API generation/editing and `AFM_IMAGE_PROVIDER=ollama`, which currently enables local SVG brief generation and vision-based evaluation.
 
 ## Usage
 
@@ -97,8 +98,8 @@ Run **Get Started with Academic Figures MCP** from the Welcome tab for a guided 
 | Generate Figure | Generate a publication-ready figure |
 | Transform Figure Style | Restyle with a visual preset |
 | Evaluate Figure | 8-domain quality assessment |
-| Configure Connection | Open the menu for SecretStorage, env-file, process-env, OpenRouter, and Ollama settings |
-| Create Environment File | Generate a Google, OpenRouter, or Ollama profile file |
+| Configure Connection | Open the menu for SecretStorage, env-file, process-env, OpenRouter, OpenAI, and Ollama settings |
+| Create Environment File | Generate a Google, OpenRouter, OpenAI, or Ollama profile file |
 | Insert MCP Settings | Write `.vscode/mcp.json` |
 | Browse Presets | Open the sidebar preset browser |
 | Browse Knowledge Assets | Open templates and guides |
@@ -111,13 +112,17 @@ Run **Get Started with Academic Figures MCP** from the Welcome tab for a guided 
 
 | Setting | Default | Description |
 | ------- | ------- | ----------- |
-| `academicFiguresMcp.transport` | `stdio` | MCP transport (`stdio` or `streamable-http`) |
-| `academicFiguresMcp.imageProvider` | `google` | Image backend (`google` or `openrouter`) |
+| `academicFiguresMcp.transport` | `stdio` | MCP transport. The extension currently launches stdio only. |
+| `academicFiguresMcp.imageProvider` | `google` | Image backend (`google`, `openrouter`, `openai`, or `ollama`) |
 | `academicFiguresMcp.credentialSource` | `secretStorage` | Credential source (`secretStorage`, `envFile`, or `processEnv`) |
 | `academicFiguresMcp.environmentFile` | `.vscode/academic-figures.env` | Env file path used when `credentialSource=envFile` |
 | `academicFiguresMcp.googleModel` | `gemini-3.1-flash-image-preview` | Direct Google model |
 | `academicFiguresMcp.openRouterModel` | `google/gemini-3.1-flash-image-preview` | OpenRouter model ID |
 | `academicFiguresMcp.openRouterBaseUrl` | `https://openrouter.ai/api/v1` | OpenRouter API base URL |
+| `academicFiguresMcp.openAiModel` | `gpt-image-2` | OpenAI image model |
+| `academicFiguresMcp.openAiBaseUrl` | `https://api.openai.com/v1` | OpenAI API base URL |
+| `academicFiguresMcp.openAiVisionModel` | `gpt-5.4-mini` | OpenAI vision review model |
+| `academicFiguresMcp.openAiImageSize` | `auto` | OpenAI Images API size hint |
 | `academicFiguresMcp.ollamaBaseUrl` | `http://localhost:11434/v1` | Stored local Ollama or OpenAI-compatible endpoint |
 | `academicFiguresMcp.ollamaModel` | `llava:latest` | Stored local model name for external or future flows |
 | `academicFiguresMcp.outputDir` | `.academic-figures` | Workspace artifact directory |

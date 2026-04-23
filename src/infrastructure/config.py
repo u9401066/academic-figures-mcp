@@ -5,13 +5,16 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from src.domain.exceptions import ConfigurationError
+
 GOOGLE_PROVIDER = "google"
 OPENROUTER_PROVIDER = "openrouter"
+OPENAI_PROVIDER = "openai"
 OLLAMA_PROVIDER = "ollama"
 METADATA_SOURCE_PUBMED = "pubmed"
 METADATA_SOURCE_FILE = "file"
 
-_SUPPORTED_PROVIDERS = {GOOGLE_PROVIDER, OPENROUTER_PROVIDER, OLLAMA_PROVIDER}
+_SUPPORTED_PROVIDERS = {GOOGLE_PROVIDER, OPENROUTER_PROVIDER, OPENAI_PROVIDER, OLLAMA_PROVIDER}
 _SUPPORTED_TRANSPORTS = {"stdio", "sse", "streamable-http"}
 _SUPPORTED_METADATA_SOURCES = {METADATA_SOURCE_PUBMED, METADATA_SOURCE_FILE}
 
@@ -20,7 +23,8 @@ def _normalize_provider(value: str) -> str:
     provider = value.strip().lower()
     if provider in _SUPPORTED_PROVIDERS:
         return provider
-    return GOOGLE_PROVIDER
+    supported = ", ".join(sorted(_SUPPORTED_PROVIDERS))
+    raise ConfigurationError(f"Unsupported AFM_IMAGE_PROVIDER '{value}'. Use one of: {supported}.")
 
 
 def _normalize_metadata_source(value: str) -> str:
@@ -33,6 +37,8 @@ def _normalize_metadata_source(value: str) -> str:
 def _default_model_for(provider: str) -> str:
     if provider == OPENROUTER_PROVIDER:
         return "google/gemini-3.1-flash-image-preview"
+    if provider == OPENAI_PROVIDER:
+        return "gpt-image-2"
     if provider == OLLAMA_PROVIDER:
         return "llava:latest"
     return "gemini-3.1-flash-image-preview"
@@ -41,6 +47,8 @@ def _default_model_for(provider: str) -> str:
 def _high_fidelity_model_for(provider: str) -> str:
     if provider == OPENROUTER_PROVIDER:
         return "google/gemini-3-pro-image-preview"
+    if provider == OPENAI_PROVIDER:
+        return "gpt-image-2"
     if provider == OLLAMA_PROVIDER:
         return "llava:latest"
     return "gemini-3-pro-image-preview"
@@ -49,6 +57,8 @@ def _high_fidelity_model_for(provider: str) -> str:
 def _low_latency_model_for(provider: str) -> str:
     if provider == OPENROUTER_PROVIDER:
         return "google/gemini-2.5-flash-image"
+    if provider == OPENAI_PROVIDER:
+        return "gpt-image-2"
     if provider == OLLAMA_PROVIDER:
         return "llava:latest"
     return "gemini-2.5-flash-image"
@@ -88,6 +98,7 @@ class GeminiConfig:
     provider: str = GOOGLE_PROVIDER
     google_api_key: str = ""
     openrouter_api_key: str = ""
+    openai_api_key: str = ""
     default_model: str = "gemini-3.1-flash-image-preview"
     high_fidelity_model: str = "gemini-3-pro-image-preview"
     low_latency_model: str = "gemini-2.5-flash-image"
@@ -96,6 +107,12 @@ class GeminiConfig:
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_http_referer: str = ""
     openrouter_app_title: str = "Academic Figures MCP"
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_image_size: str = "auto"
+    openai_quality: str = "auto"
+    openai_background: str = "auto"
+    openai_output_format: str = "png"
+    openai_vision_model: str = "gpt-5.4-mini"
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_model: str = "llava:latest"
     request_timeout_seconds: float = 180.0
@@ -107,6 +124,8 @@ class GeminiConfig:
     def api_key(self) -> str:
         if self.provider == OPENROUTER_PROVIDER:
             return self.openrouter_api_key
+        if self.provider == OPENAI_PROVIDER:
+            return self.openai_api_key
         if self.provider == GOOGLE_PROVIDER:
             return self.google_api_key
         return ""
@@ -114,6 +133,10 @@ class GeminiConfig:
     @property
     def is_openrouter(self) -> bool:
         return self.provider == OPENROUTER_PROVIDER
+
+    @property
+    def is_openai(self) -> bool:
+        return self.provider == OPENAI_PROVIDER
 
     @property
     def is_google(self) -> bool:
@@ -125,12 +148,14 @@ class GeminiConfig:
 
     @property
     def requires_api_key(self) -> bool:
-        return self.provider in {GOOGLE_PROVIDER, OPENROUTER_PROVIDER}
+        return self.provider in {GOOGLE_PROVIDER, OPENROUTER_PROVIDER, OPENAI_PROVIDER}
 
     @property
     def required_api_key_env(self) -> str:
         if self.provider == OPENROUTER_PROVIDER:
             return "OPENROUTER_API_KEY"
+        if self.provider == OPENAI_PROVIDER:
+            return "OPENAI_API_KEY"
         if self.provider == GOOGLE_PROVIDER:
             return "GOOGLE_API_KEY"
         return ""
@@ -162,14 +187,22 @@ def load_config() -> ServerConfig:
     Required:
         GOOGLE_API_KEY — required when AFM_IMAGE_PROVIDER=google
         OPENROUTER_API_KEY — required when AFM_IMAGE_PROVIDER=openrouter
+        OPENAI_API_KEY — required when AFM_IMAGE_PROVIDER=openai
 
     Optional:
-        AFM_IMAGE_PROVIDER — "google" | "openrouter" | "ollama" (default: google)
+        AFM_IMAGE_PROVIDER — "google" | "openrouter" | "openai" | "ollama" (default: google)
         MCP_TRANSPORT — "stdio" | "sse" | "streamable-http" (default: stdio)
         GEMINI_MODEL — override default model name
         GEMINI_HIGH_FIDELITY_MODEL — override pro model name
         GEMINI_LOW_LATENCY_MODEL — override low-latency model name
         GEMINI_IMAGE_SIZE — "0.5K" | "1K" | "2K" | "4K"
+        OPENAI_IMAGE_MODEL — override OpenAI image generation model
+        OPENAI_BASE_URL — OpenAI-compatible API base URL (default: https://api.openai.com/v1)
+        OPENAI_IMAGE_SIZE — Images API size, e.g. auto, 1024x1024, 1024x1536
+        OPENAI_IMAGE_QUALITY — Images API quality (default: auto)
+        OPENAI_IMAGE_BACKGROUND — Images API background (default: auto)
+        OPENAI_IMAGE_OUTPUT_FORMAT — png, jpeg, or webp (default: png)
+        OPENAI_VISION_MODEL — text-capable vision reviewer model
         AFM_OUTPUT_DIR — output directory (default: .academic-figures/outputs)
         AFM_MANIFEST_DIR — manifest directory (default: .academic-figures/manifests)
         AFM_METADATA_SOURCE — "pubmed" | "file" (default: pubmed)
@@ -188,17 +221,23 @@ def load_config() -> ServerConfig:
     provider = _normalize_provider(os.environ.get("AFM_IMAGE_PROVIDER", GOOGLE_PROVIDER))
     google_api_key = os.environ.get("GOOGLE_API_KEY", "")
     openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    openai_api_key = os.environ.get("OPENAI_API_KEY", "")
     ollama_model = os.environ.get("OLLAMA_MODEL", _default_model_for(OLLAMA_PROVIDER))
-    default_model = (
-        ollama_model
-        if provider == OLLAMA_PROVIDER
-        else os.environ.get("GEMINI_MODEL", _default_model_for(provider))
-    )
+    if provider == OLLAMA_PROVIDER:
+        default_model = ollama_model
+    elif provider == OPENAI_PROVIDER:
+        default_model = os.environ.get(
+            "OPENAI_IMAGE_MODEL",
+            os.environ.get("GEMINI_MODEL", _default_model_for(provider)),
+        )
+    else:
+        default_model = os.environ.get("GEMINI_MODEL", _default_model_for(provider))
 
     gemini = GeminiConfig(
         provider=provider,
         google_api_key=google_api_key,
         openrouter_api_key=openrouter_api_key,
+        openai_api_key=openai_api_key,
         default_model=default_model,
         high_fidelity_model=os.environ.get(
             "GEMINI_HIGH_FIDELITY_MODEL",
@@ -227,6 +266,27 @@ def load_config() -> ServerConfig:
         openrouter_app_title=os.environ.get(
             "OPENROUTER_APP_TITLE",
             GeminiConfig.openrouter_app_title,
+        ),
+        openai_base_url=os.environ.get("OPENAI_BASE_URL", GeminiConfig.openai_base_url),
+        openai_image_size=os.environ.get(
+            "OPENAI_IMAGE_SIZE",
+            GeminiConfig.openai_image_size,
+        ),
+        openai_quality=os.environ.get(
+            "OPENAI_IMAGE_QUALITY",
+            GeminiConfig.openai_quality,
+        ),
+        openai_background=os.environ.get(
+            "OPENAI_IMAGE_BACKGROUND",
+            GeminiConfig.openai_background,
+        ),
+        openai_output_format=os.environ.get(
+            "OPENAI_IMAGE_OUTPUT_FORMAT",
+            GeminiConfig.openai_output_format,
+        ),
+        openai_vision_model=os.environ.get(
+            "OPENAI_VISION_MODEL",
+            GeminiConfig.openai_vision_model,
         ),
         ollama_base_url=os.environ.get("OLLAMA_BASE_URL", GeminiConfig.ollama_base_url),
         ollama_model=ollama_model,

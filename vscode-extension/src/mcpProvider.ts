@@ -15,6 +15,7 @@ export type AcademicFiguresRuntimeSpec = {
 
 export const GOOGLE_API_KEY_SECRET = "academicFiguresMcp.googleApiKey";
 export const OPENROUTER_API_KEY_SECRET = "academicFiguresMcp.openRouterApiKey";
+export const OPENAI_API_KEY_SECRET = "academicFiguresMcp.openAiApiKey";
 export const SECRET_STORAGE_SOURCE = "secretStorage";
 export const ENV_FILE_SOURCE = "envFile";
 export const PROCESS_ENV_SOURCE = "processEnv";
@@ -22,6 +23,10 @@ export const DEFAULT_ENV_FILE = ".vscode/academic-figures.env";
 const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_OPENROUTER_MODEL = "google/gemini-3.1-flash-image-preview";
 const DEFAULT_GOOGLE_MODEL = "gemini-3.1-flash-image-preview";
+const DEFAULT_OPENAI_MODEL = "gpt-image-2";
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4-mini";
+const DEFAULT_OPENAI_IMAGE_SIZE = "auto";
 const DEFAULT_OPENROUTER_TITLE = "Academic Figures MCP";
 const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1";
 const DEFAULT_OLLAMA_MODEL = "llava:latest";
@@ -130,10 +135,19 @@ export class AcademicFiguresMcpProvider
       credentialSource === SECRET_STORAGE_SOURCE
         ? (await this.context.secrets.get(OPENROUTER_API_KEY_SECRET)) ?? env.OPENROUTER_API_KEY
         : env.OPENROUTER_API_KEY;
+    const openAiApiKey =
+      credentialSource === SECRET_STORAGE_SOURCE
+        ? (await this.context.secrets.get(OPENAI_API_KEY_SECRET)) ?? env.OPENAI_API_KEY
+        : env.OPENAI_API_KEY;
 
     env.AFM_IMAGE_PROVIDER = provider;
     if (provider === "openrouter") {
       env.GEMINI_MODEL = config.get<string>("openRouterModel", DEFAULT_OPENROUTER_MODEL);
+    } else if (provider === "openai") {
+      env.OPENAI_IMAGE_MODEL = config.get<string>("openAiModel", DEFAULT_OPENAI_MODEL);
+      env.OPENAI_BASE_URL = config.get<string>("openAiBaseUrl", DEFAULT_OPENAI_BASE_URL);
+      env.OPENAI_VISION_MODEL = config.get<string>("openAiVisionModel", DEFAULT_OPENAI_VISION_MODEL);
+      env.OPENAI_IMAGE_SIZE = config.get<string>("openAiImageSize", DEFAULT_OPENAI_IMAGE_SIZE);
     } else if (provider === "ollama") {
       env.GEMINI_MODEL = config.get<string>("ollamaModel", DEFAULT_OLLAMA_MODEL);
     } else {
@@ -145,6 +159,9 @@ export class AcademicFiguresMcpProvider
     }
     if (openRouterApiKey) {
       env.OPENROUTER_API_KEY = openRouterApiKey;
+    }
+    if (openAiApiKey) {
+      env.OPENAI_API_KEY = openAiApiKey;
     }
     if (provider === "openrouter") {
       env.OPENROUTER_BASE_URL = config.get<string>("openRouterBaseUrl", DEFAULT_OPENROUTER_BASE_URL);

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import re
 import time
@@ -15,7 +16,12 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast
 from google.genai import types
 
 from src.domain.entities import GenerationResult
-from src.infrastructure.config import OLLAMA_PROVIDER, OPENROUTER_PROVIDER
+from src.infrastructure.config import (
+    GOOGLE_PROVIDER,
+    OLLAMA_PROVIDER,
+    OPENAI_PROVIDER,
+    OPENROUTER_PROVIDER,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -113,17 +119,42 @@ class ProviderSupport(Protocol):
         payload: dict[str, object],
     ) -> tuple[dict[str, object] | None, ProviderFailure | None]: ...
 
+    def _request_multipart_with_retry(
+        self,
+        *,
+        endpoint: str,
+        headers: dict[str, str],
+        data: dict[str, str],
+        files: list[tuple[str, tuple[str, bytes, str]]],
+    ) -> tuple[dict[str, object] | None, ProviderFailure | None]: ...
+
     def _google_client(self) -> Any: ...
 
     def _openrouter_endpoint(self) -> str: ...
 
     def _ollama_endpoint(self) -> str: ...
 
+    def _openai_images_generation_endpoint(self) -> str: ...
+
+    def _openai_images_edit_endpoint(self) -> str: ...
+
+    def _openai_responses_endpoint(self) -> str: ...
+
     def _openrouter_headers(self) -> dict[str, str]: ...
+
+    def _openai_headers(self, *, json_content_type: bool = True) -> dict[str, str]: ...
 
     def _openrouter_image_config(self, aspect_ratio: str) -> dict[str, str]: ...
 
     def _google_image_size(self) -> str | None: ...
+
+    def _openai_image_options(
+        self,
+        *,
+        output_size: str | None = None,
+    ) -> dict[str, str]: ...
+
+    def _openai_vision_model(self) -> str: ...
 
 
 class ProviderRuntime(Protocol):
@@ -135,6 +166,7 @@ class ProviderRuntime(Protocol):
         prompt: str,
         model_name: str,
         aspect_ratio: str,
+        output_size: str | None,
         start: float,
     ) -> RuntimeOutcome: ...
 
@@ -296,6 +328,66 @@ def parse_openrouter_text_response(
     )
 
 
+def parse_openai_image_response(
+    data: dict[str, object],
+    *,
+    hinted_media_type: str | None = None,
+) -> tuple[ProviderImagePayload | None, ProviderFailure | None]:
+    """Extract base64 image bytes from an OpenAI Images API response."""
+
+    raw_items = data.get("data")
+    items = raw_items if isinstance(raw_items, list) else []
+    first_item = items[0] if items else {}
+    item = first_item if isinstance(first_item, dict) else {}
+    encoded = item.get("b64_json")
+    if not isinstance(encoded, str) or not encoded.strip():
+        return None, ProviderFailure(
+            kind=ProviderFailureKind.INVALID_RESPONSE,
+            message="No base64 image returned by OpenAI image model",
+        )
+
+    try:
+        image_bytes = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        return None, ProviderFailure(
+            kind=ProviderFailureKind.INVALID_RESPONSE,
+            message=f"Invalid base64 image returned by OpenAI image model: {exc}",
+        )
+
+    revised_prompt = item.get("revised_prompt")
+    text = revised_prompt if isinstance(revised_prompt, str) else ""
+    return (
+        ProviderImagePayload(
+            image_bytes=image_bytes,
+            text=text,
+            media_type=detect_image_media_type(
+                image_bytes,
+                hinted_media_type=hinted_media_type,
+            ),
+        ),
+        None,
+    )
+
+
+def parse_openai_text_response(
+    data: dict[str, object],
+) -> tuple[str | None, ProviderFailure | None]:
+    """Extract textual output from an OpenAI Responses API payload."""
+
+    output_text = data.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text.strip(), None
+
+    text_parts = _openai_output_text_parts(data)
+    text = "\n".join(part for part in text_parts if part.strip()).strip()
+    if text:
+        return text, None
+    return None, ProviderFailure(
+        kind=ProviderFailureKind.INVALID_RESPONSE,
+        message="No evaluation returned by OpenAI vision model",
+    )
+
+
 def image_result_from_payload(
     *,
     payload: ProviderImagePayload,
@@ -335,8 +427,11 @@ class GoogleProviderRuntime:
         prompt: str,
         model_name: str,
         aspect_ratio: str,
+        output_size: str | None,
         start: float,
     ) -> RuntimeOutcome:
+        del output_size
+
         image_config: dict[str, str] = {"aspect_ratio": aspect_ratio}
         image_size = self._support._google_image_size()
         if image_size:
@@ -466,8 +561,11 @@ class OpenRouterProviderRuntime:
         prompt: str,
         model_name: str,
         aspect_ratio: str,
+        output_size: str | None,
         start: float,
     ) -> RuntimeOutcome:
+        del output_size
+
         payload: dict[str, object] = {
             "model": model_name,
             "messages": [{"role": "user", "content": prompt}],
@@ -602,6 +700,163 @@ class OpenRouterProviderRuntime:
         return RuntimeOutcome.success(text_result(text=text, model_name=model_name, start=start))
 
 
+class OpenAIProviderRuntime:
+    """OpenAI runtime for GPT Image generation/editing and vision review."""
+
+    def __init__(self, support: ProviderSupport) -> None:
+        self._support = support
+
+    def generate(
+        self,
+        *,
+        prompt: str,
+        model_name: str,
+        aspect_ratio: str,
+        output_size: str | None,
+        start: float,
+    ) -> RuntimeOutcome:
+        del aspect_ratio
+
+        payload: dict[str, object] = {
+            "model": model_name,
+            "prompt": prompt,
+            **self._support._openai_image_options(output_size=output_size),
+        }
+        data, failure = self._support._request_json_with_retry(
+            endpoint=self._support._openai_images_generation_endpoint(),
+            headers=self._support._openai_headers(),
+            payload=payload,
+        )
+        if failure is not None or data is None:
+            return RuntimeOutcome.failed(
+                failure
+                or ProviderFailure(
+                    kind=ProviderFailureKind.PERMANENT,
+                    message="OpenAI image provider failed",
+                )
+            )
+
+        parsed, failure = parse_openai_image_response(
+            data,
+            hinted_media_type=self._hinted_output_media_type(),
+        )
+        if failure is not None or parsed is None:
+            return RuntimeOutcome.failed(
+                failure
+                or ProviderFailure(
+                    kind=ProviderFailureKind.INVALID_RESPONSE,
+                    message="No image returned by OpenAI image model",
+                )
+            )
+        return RuntimeOutcome.success(
+            image_result_from_payload(payload=parsed, model_name=model_name, start=start)
+        )
+
+    def edit(
+        self,
+        *,
+        image_bytes: bytes,
+        mime_type: str,
+        instruction: str,
+        model_name: str,
+        start: float,
+    ) -> RuntimeOutcome:
+        filename = _filename_for_mime_type(mime_type)
+        data_fields = {
+            "model": model_name,
+            "prompt": instruction,
+            **self._support._openai_image_options(output_size=None),
+        }
+        data, failure = self._support._request_multipart_with_retry(
+            endpoint=self._support._openai_images_edit_endpoint(),
+            headers=self._support._openai_headers(json_content_type=False),
+            data=data_fields,
+            files=[("image[]", (filename, image_bytes, mime_type))],
+        )
+        if failure is not None or data is None:
+            return RuntimeOutcome.failed(
+                failure
+                or ProviderFailure(
+                    kind=ProviderFailureKind.PERMANENT,
+                    message="OpenAI image edit failed",
+                )
+            )
+
+        parsed, failure = parse_openai_image_response(
+            data,
+            hinted_media_type=self._hinted_output_media_type(),
+        )
+        if failure is not None or parsed is None:
+            return RuntimeOutcome.failed(
+                failure
+                or ProviderFailure(
+                    kind=ProviderFailureKind.INVALID_RESPONSE,
+                    message="No image returned by OpenAI image edit model",
+                )
+            )
+        return RuntimeOutcome.success(
+            image_result_from_payload(payload=parsed, model_name=model_name, start=start)
+        )
+
+    def evaluate(
+        self,
+        *,
+        image_bytes: bytes,
+        mime_type: str,
+        instruction: str,
+        model_name: str,
+        start: float,
+    ) -> RuntimeOutcome:
+        del model_name
+
+        image_data_url = _data_url_for_image(image_bytes=image_bytes, mime_type=mime_type)
+        vision_model = self._support._openai_vision_model()
+        payload: dict[str, object] = {
+            "model": vision_model,
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": instruction},
+                        {"type": "input_image", "image_url": image_data_url},
+                    ],
+                }
+            ],
+        }
+        data, failure = self._support._request_json_with_retry(
+            endpoint=self._support._openai_responses_endpoint(),
+            headers=self._support._openai_headers(),
+            payload=payload,
+        )
+        if failure is not None or data is None:
+            return RuntimeOutcome.failed(
+                failure
+                or ProviderFailure(
+                    kind=ProviderFailureKind.PERMANENT,
+                    message="OpenAI vision provider failed",
+                )
+            )
+
+        text, failure = parse_openai_text_response(data)
+        if failure is not None or text is None:
+            return RuntimeOutcome.failed(
+                failure
+                or ProviderFailure(
+                    kind=ProviderFailureKind.INVALID_RESPONSE,
+                    message="No evaluation returned by OpenAI vision model",
+                )
+            )
+        return RuntimeOutcome.success(text_result(text=text, model_name=vision_model, start=start))
+
+    def _hinted_output_media_type(self) -> str:
+        normalized = self._support._config.openai_output_format.strip().lower()
+        if normalized in {"jpg", "jpeg"}:
+            return "image/jpeg"
+        if normalized == "webp":
+            return "image/webp"
+        return "image/png"
+
+
 class OllamaProviderRuntime:
     """Ollama-specific runtime for local generation and evaluation flows."""
 
@@ -614,9 +869,10 @@ class OllamaProviderRuntime:
         prompt: str,
         model_name: str,
         aspect_ratio: str,
+        output_size: str | None,
         start: float,
     ) -> RuntimeOutcome:
-        del aspect_ratio
+        del aspect_ratio, output_size
 
         text, failure = _ollama_chat(
             support=self._support,
@@ -730,9 +986,13 @@ def build_provider_runtime(support: ProviderSupport) -> ProviderRuntime:
 
     if support._config.provider == OLLAMA_PROVIDER:
         return OllamaProviderRuntime(support)
+    if support._config.provider == OPENAI_PROVIDER:
+        return OpenAIProviderRuntime(support)
     if support._config.provider == OPENROUTER_PROVIDER:
         return OpenRouterProviderRuntime(support)
-    return GoogleProviderRuntime(support)
+    if support._config.provider == GOOGLE_PROVIDER:
+        return GoogleProviderRuntime(support)
+    raise ValueError(f"Unsupported image provider: {support._config.provider}")
 
 
 def _normalize_image_media_type(value: str | None) -> str | None:
@@ -767,6 +1027,30 @@ def _extract_message_text(data: dict[str, object]) -> str:
                 text_chunks.append(maybe_text)
         return "\n".join(text_chunks)
     return ""
+
+
+def _openai_output_text_parts(data: dict[str, object]) -> list[str]:
+    raw_output = data.get("output")
+    output_items = raw_output if isinstance(raw_output, list) else []
+    text_parts: list[str] = []
+    for raw_item in output_items:
+        item = raw_item if isinstance(raw_item, dict) else {}
+        raw_content = item.get("content")
+        content_items = raw_content if isinstance(raw_content, list) else []
+        for raw_content_item in content_items:
+            content_item = raw_content_item if isinstance(raw_content_item, dict) else {}
+            maybe_text = content_item.get("text")
+            if isinstance(maybe_text, str):
+                text_parts.append(maybe_text)
+    return text_parts
+
+
+def _filename_for_mime_type(mime_type: str) -> str:
+    if mime_type == "image/jpeg":
+        return "input.jpg"
+    if mime_type == "image/webp":
+        return "input.webp"
+    return "input.png"
 
 
 def _ollama_chat(

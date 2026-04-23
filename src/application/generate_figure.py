@@ -295,6 +295,7 @@ class GenerateFigureUseCase:
         result: GenerationResult = self._generator.generate(
             prompt=prompt,
             model=self._resolve_model(payload),
+            output_size=output_size,
         )
         if not result.ok:
             failed_payload: dict[str, Any] = {

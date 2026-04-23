@@ -67,7 +67,10 @@ class RetargetJournalUseCase:
         )
         profile_diff = self._profile_diff(manifest.journal_profile, profile)
 
-        result: GenerationResult = self._generator.generate(prompt=retargeted_prompt)
+        result: GenerationResult = self._generator.generate(
+            prompt=retargeted_prompt,
+            output_size=manifest.output_size,
+        )
         if not result.ok:
             error_payload: dict[str, Any] = {
                 "status": ApplicationStatus.GENERATION_FAILED.value,

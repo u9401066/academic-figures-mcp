@@ -40,9 +40,11 @@ class StubFetcher(MetadataFetcher):
 class StubGenerator(ImageGenerator):
     def __init__(self) -> None:
         self.prompt = ""
+        self.generate_kwargs: dict[str, object] = {}
 
-    def generate(self, prompt: str, **_: object) -> GenerationResult:
+    def generate(self, prompt: str, **kwargs: object) -> GenerationResult:
         self.prompt = prompt
+        self.generate_kwargs = kwargs
         return GenerationResult(image_bytes=b"fake-png", model="stub-model")
 
     def edit(self, image_path: Path, instruction: str, **_: object) -> GenerationResult:
@@ -259,6 +261,7 @@ def test_generate_figure_supports_generic_planned_payload(tmp_path: Path) -> Non
     assert result["render_route_used"] == "image_generation"
     assert Path(str(result["output_path"])).exists()
     assert "repo_icon" in generator.prompt
+    assert generator.generate_kwargs["output_size"] == "1024x1024"
     assert "## Journal Profile" in generator.prompt
     journal_profile = cast("dict[str, object]", result["journal_profile"])
     assert journal_profile["id"] == "nature_portfolio"

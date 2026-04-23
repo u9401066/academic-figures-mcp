@@ -151,6 +151,7 @@
           "enum": [
             "google",
             "openrouter",
+            "openai",
             "ollama"
           ],
           "description": "Backend provider used for figure generation or local SVG rendering."
@@ -194,6 +195,26 @@
           "type": "string",
           "default": "Academic Figures MCP",
           "description": "Optional X-OpenRouter-Title header sent to OpenRouter."
+        },
+        "academicFiguresMcp.openAiModel": {
+          "type": "string",
+          "default": "gpt-image-2",
+          "description": "OpenAI image generation/editing model used when imageProvider=openai."
+        },
+        "academicFiguresMcp.openAiBaseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "Base URL for OpenAI or an OpenAI-compatible Images/Responses API."
+        },
+        "academicFiguresMcp.openAiVisionModel": {
+          "type": "string",
+          "default": "gpt-5.4-mini",
+          "description": "OpenAI text-capable vision model used for provider-side figure review."
+        },
+        "academicFiguresMcp.openAiImageSize": {
+          "type": "string",
+          "default": "auto",
+          "description": "OpenAI Images API size hint, for example auto, 1024x1024, or 1024x1536."
         },
         "academicFiguresMcp.ollamaBaseUrl": {
           "type": "string",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from src.presentation.resources import inventory_resource
+from src.presentation.resources import inventory_resource, provider_capabilities_resource
 
 
 def test_inventory_lists_all_registered_tools() -> None:
@@ -74,3 +74,20 @@ def test_inventory_documents_typed_aggregate_schema() -> None:
     assert "complete_partial_failure" in aggregate_contract["statuses"]
     assert "list_ready" in aggregate_contract["statuses"]
     assert "TypeScript interfaces" in aggregate_contract["extension_type_mapping_guidance"]
+
+
+def test_inventory_lists_provider_capabilities_resource() -> None:
+    inventory = json.loads(inventory_resource())
+
+    assert "academic-figures://provider-capabilities" in inventory["resources"]
+    assert "openai" in inventory["supported_image_providers"]
+
+
+def test_provider_capabilities_document_openai_gpt_image_2_path() -> None:
+    capabilities = json.loads(provider_capabilities_resource())
+
+    openai = capabilities["providers"]["openai"]
+    assert openai["default_model"] == "gpt-image-2"
+    assert openai["structured_options"]["output_size"] is True
+    assert "POST /v1/images/generations" in openai["endpoints"]
+    assert capabilities["planned_payload_contract"]["schema_version"] == "planned_payload_v1"

@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import base64
 from typing import TYPE_CHECKING
 
 from src.domain.entities import GenerationResult
 from src.domain.value_objects import EVAL_DOMAINS
-from src.infrastructure.config import GOOGLE_PROVIDER, OLLAMA_PROVIDER, GeminiConfig
+from src.infrastructure.config import (
+    GOOGLE_PROVIDER,
+    OLLAMA_PROVIDER,
+    OPENAI_PROVIDER,
+    GeminiConfig,
+)
 from src.infrastructure.gemini_adapter import (
     GeminiAdapter,
     GeminiFigureEvaluator,
@@ -15,6 +21,8 @@ from src.infrastructure.gemini_provider_runtimes import (
     ProviderFailure,
     ProviderFailureKind,
     RuntimeOutcome,
+    parse_openai_image_response,
+    parse_openai_text_response,
     parse_openrouter_image_response,
 )
 
@@ -42,7 +50,9 @@ def test_google_generate_falls_back_to_alternate_provider(monkeypatch: MonkeyPat
             *,
             aspect_ratio: str | None = None,
             model: str | None = None,
+            output_size: str | None = None,
         ) -> GenerationResult:
+            del output_size
             return GenerationResult(image_bytes=b"fallback-image", model="fallback-model")
 
     monkeypatch.setattr(
@@ -338,3 +348,123 @@ def test_parse_openrouter_image_response_reports_typed_failure_when_image_missin
     assert failure is not None
     assert failure.kind is ProviderFailureKind.INVALID_RESPONSE
     assert failure.message == "No image returned by OpenRouter image model"
+
+
+def test_parse_openai_image_response_extracts_base64_png() -> None:
+    encoded = base64.b64encode(b"\x89PNG\r\n\x1a\nfake-png").decode("ascii")
+
+    payload, failure = parse_openai_image_response({"data": [{"b64_json": encoded}]})
+
+    assert failure is None
+    assert payload is not None
+    assert payload.image_bytes.startswith(b"\x89PNG")
+    assert payload.media_type == "image/png"
+
+
+def test_parse_openai_text_response_extracts_responses_output_text() -> None:
+    text, failure = parse_openai_text_response(
+        {
+            "output": [
+                {
+                    "content": [
+                        {"type": "output_text", "text": "text_accuracy: 5 clear"},
+                    ]
+                }
+            ]
+        }
+    )
+
+    assert failure is None
+    assert text == "text_accuracy: 5 clear"
+
+
+def test_openai_generate_uses_images_api_and_output_size(monkeypatch: MonkeyPatch) -> None:
+    encoded = base64.b64encode(b"\x89PNG\r\n\x1a\nfake-png").decode("ascii")
+    captured: dict[str, object] = {}
+    config = GeminiConfig(
+        provider=OPENAI_PROVIDER,
+        openai_api_key="openai-key",
+        default_model="gpt-image-2",
+        openai_image_size="auto",
+        enable_provider_fallback=False,
+    )
+    adapter = GeminiAdapter(config)
+
+    def fake_request_json(**kwargs: object) -> tuple[dict[str, object], None]:
+        captured.update(kwargs)
+        return {"data": [{"b64_json": encoded}]}, None
+
+    monkeypatch.setattr(adapter._generation, "_request_json_with_retry", fake_request_json)
+
+    result = adapter.generate("academic figure prompt", output_size="1024x1536")
+
+    assert result.ok is True
+    assert captured["endpoint"] == "https://api.openai.com/v1/images/generations"
+    payload = captured["payload"]
+    assert isinstance(payload, dict)
+    assert payload["model"] == "gpt-image-2"
+    assert payload["size"] == "1024x1536"
+    assert payload["output_format"] == "png"
+
+
+def test_openai_edit_uses_images_edit_multipart(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    encoded = base64.b64encode(b"\x89PNG\r\n\x1a\nfake-png").decode("ascii")
+    captured: dict[str, object] = {}
+    config = GeminiConfig(
+        provider=OPENAI_PROVIDER,
+        openai_api_key="openai-key",
+        default_model="gpt-image-2",
+        enable_provider_fallback=False,
+    )
+    adapter = GeminiAdapter(config)
+    image_path = tmp_path / "figure.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nsource")
+
+    def fake_request_multipart(**kwargs: object) -> tuple[dict[str, object], None]:
+        captured.update(kwargs)
+        return {"data": [{"b64_json": encoded}]}, None
+
+    monkeypatch.setattr(adapter._editing, "_request_multipart_with_retry", fake_request_multipart)
+
+    result = adapter.edit(image_path, "remove background artifacts")
+
+    assert result.ok is True
+    assert captured["endpoint"] == "https://api.openai.com/v1/images/edits"
+    data = captured["data"]
+    assert isinstance(data, dict)
+    assert data["model"] == "gpt-image-2"
+    files = captured["files"]
+    assert isinstance(files, list)
+    assert files[0][0] == "image[]"
+
+
+def test_openai_evaluator_uses_responses_vision_model(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+    config = GeminiConfig(
+        provider=OPENAI_PROVIDER,
+        openai_api_key="openai-key",
+        default_model="gpt-image-2",
+        openai_vision_model="gpt-5.4-mini",
+        enable_provider_fallback=False,
+    )
+    evaluator = GeminiFigureEvaluator(config)
+    image_path = tmp_path / "figure.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nsource")
+
+    def fake_request_json(**kwargs: object) -> tuple[dict[str, object], None]:
+        captured.update(kwargs)
+        return {"output_text": "text_accuracy: 5 clear"}, None
+
+    monkeypatch.setattr(evaluator, "_request_json_with_retry", fake_request_json)
+
+    result = evaluator.evaluate(image_path, "Evaluate this figure")
+
+    assert result.text == "text_accuracy: 5 clear"
+    assert result.model == "gpt-5.4-mini"
+    assert captured["endpoint"] == "https://api.openai.com/v1/responses"
+    payload = captured["payload"]
+    assert isinstance(payload, dict)
+    assert payload["model"] == "gpt-5.4-mini"
