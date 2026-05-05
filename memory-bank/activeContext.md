@@ -25,8 +25,10 @@
 - Preserve the publication-image delivery hardening: unsupported output suffixes are rejected, explicit `output_format` requests produce matching canonical suffixes, directories/unreadable rasters become domain validation errors, and metadata-only warnings report the requested target DPI.
 - Preserve the OpenAI-ready provider path: `AFM_IMAGE_PROVIDER=openai` selects `gpt-image-2` for Images API generation/editing, uses `OPENAI_VISION_MODEL` for Responses API review, and receives `output_size` as a structured provider hint instead of only prompt text.
 - Preserve provider fail-closed behavior: unknown `AFM_IMAGE_PROVIDER` values now raise configuration errors instead of silently falling back to Google.
-- Prepare the 0.4.5 release slice: keep version, changelog, memory bank, tag, and PyPI/VS Code release artifacts aligned.
+- Prepare the 0.4.6 release slice: keep version, changelog, memory bank, tag, and PyPI/VS Code release artifacts aligned.
+- Preserve the VSIX install/update non-destructive contract: automatic bundled assistant asset sync may install missing files but must preserve user-owned workspace skills/rules/agents, and Codex/Cline installers must not overwrite unmanaged same-key MCP entries.
+- Preserve the package-smoke contract: release smoke builds a wheel, installs it into a temporary virtual environment, and runs `afm-run` outside the repository so installed package data and console scripts are tested without source-tree shadowing.
 
 ## Current Blockers
 
-- No current blocker. Remaining risk before release is final full-suite/package smoke validation and successful tag push.
+- No current code blocker. Release is in progress: commit the 0.4.6 slices, push `main`, create annotated tag `v0.4.6`, and push the tag.

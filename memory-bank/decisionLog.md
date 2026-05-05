@@ -2,6 +2,8 @@
 
 | Date | Decision | Rationale |
 | ---- | -------- | --------- |
+| 2026-05-05 | Ship the Codex/Cline/assistant-harness release as 0.4.6 because tag `v0.4.5` already exists on an older commit. | Retagging an existing release would blur provenance. A patch bump keeps the new VSIX install/update hardening, wheel package-smoke fix, and bundled harness assets tied to a fresh annotated tag. |
+| 2026-05-05 | Keep automatic VSIX assistant asset sync non-destructive and reserve overwrites for explicit manual install/update commands. | Activation runs without a user's immediate attention, so it may install missing bundled assets but must preserve user-owned workspace skills, rules, agents, Codex config blocks, and Cline same-key server entries. |
 | 2026-04-10 | Adopt a dual-deliverable architecture: a local MCP server for agent orchestration and a VS Code extension for Copilot/human workflows, with a structured style preset registry as a core shared layer. | The current repo already has prompt and standards knowledge, but it lacks a reusable data layer for style conversion and a user-facing shell. Making presets a shared structured layer lets both the MCP server and the extension resolve the same journal/style/domain defaults and keeps style transfer explainable and extensible. |
 | 2026-04-10 | VS Code extension 以設定切換 google/openrouter provider，並使用 SecretStorage 注入對應 API key 與 OpenRouter headers 到 MCP 啟動環境。 | 這讓本機工作區不必保存明文金鑰，同時讓 OpenRouter 模型 `google/gemini-3.1-flash-image-preview` 與直接 Google Gemini 模式共用同一套 VSX 啟動流程。 |
 | 2026-04-10 | 專案與 VS Code extension 一律採用 Apache License 2.0，並在 repo root 與 extension 子專案各自放置一份 LICENSE 檔。 | root LICENSE 可覆蓋整體專案授權，extension-local LICENSE 可讓 vsce 在子專案目錄內打包時正確辨識授權，避免使用 skip-license 繞過缺少授權檔的問題。 |

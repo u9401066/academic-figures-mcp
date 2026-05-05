@@ -1,7 +1,12 @@
-# Progress (Updated: 2026-04-23)
+# Progress (Updated: 2026-05-05)
 
 ## Done
 
+- 0.4.6 release prep: added VSIX-bundled Codex/Cline/Copilot assistant harness assets and package-content guards for the intended repo-assets surface.
+- 0.4.6 release prep: Codex and Cline MCP installers now preserve unmanaged same-key `academic-figures` entries, and automatic assistant asset sync preserves user-owned workspace skill/rule/agent files.
+- 0.4.6 release prep: package-mode smoke now builds and installs the wheel in a temporary venv, runs `afm-run` outside the repository, and verifies `journal_profile=nature_portfolio`.
+- 0.4.6 release prep: fixed installed-wheel template discovery for uv archive layouts where wheel data files land at the install root `templates/` directory.
+- 0.4.6 release prep: release workflow docs no longer reference missing helper scripts, and Docker smoke is conditional on a present `Dockerfile`.
 - 確認 0.4.4 release gate 全數通過：ruff check、ruff format --check、mypy、bandit、pytest
 - 完成 Python 套件建置與 VS Code extension VSIX 打包驗證
 - 已建立並推送 0.4.4 release commit 到 main
@@ -58,8 +63,12 @@
 
 ## Doing
 
+- Finalize the 0.4.6 segmented commits, push `main`, create annotated tag `v0.4.6`, and push the tag.
+
 - 準備 0.4.5 release：版本/CHANGELOG/Memory Bank 與 full validation 已完成，接著分段 commit、annotated tag、push
 
 ## Next
+
+- Monitor the tag-triggered publish workflow and verify PyPI/VS Code Marketplace artifacts after GitHub Actions completes.
 
 - 建立 0.4.5 release commit、annotated tag，並 push main + tag

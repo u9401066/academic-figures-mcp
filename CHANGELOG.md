@@ -6,6 +6,25 @@ The format is based on Keep a Changelog, with repository history backfilled from
 
 ## [Unreleased]
 
+## [0.4.6]
+
+### Added in 0.4.6
+
+- Added VSIX-bundled assistant harness assets for Codex, Cline, Copilot agents, and release workflows, with package-content checks to keep the bundled asset surface intentional.
+- Added Codex and Cline MCP config installers so the VS Code extension can help host agents launch `academic-figures-mcp` in package mode.
+
+### Changed in 0.4.6
+
+- Changed package smoke verification to build the wheel, install it into a temporary virtual environment, and execute `afm-run` from outside the repository so package-mode checks cannot accidentally pass by importing the source tree.
+- Updated release workflows and VSIX publishing CI so assistant assets are synchronized and package contents are checked before packaging or publishing.
+
+### Fixed in 0.4.6
+
+- Fixed installed-wheel journal profile discovery under uv archive layouts so `journal-profiles.yaml` is found when package data lands beside the installed environment root.
+- Fixed VSIX activation/update behavior so automatic assistant asset sync preserves user-owned workspace skill, rule, and agent files.
+- Fixed Codex and Cline MCP installers so user-owned same-key `academic-figures` server entries are not overwritten when they are not managed by this extension.
+- Fixed release documentation drift by removing references to missing helper scripts and making Docker smoke conditional on a present `Dockerfile`.
+
 ## [0.4.5]
 
 ### Added in 0.4.5
