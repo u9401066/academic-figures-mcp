@@ -142,11 +142,14 @@ jobs:
           fi
           echo "✅ Version match: $EXT_VERSION"
 
+      - name: Run extension CI
+        run: npm run test:ci
+
       - name: Package VSIX
-        run: npx @vscode/vsce package
+        run: npm run package
 
       - name: Publish to VS Code Marketplace
-        run: npx @vscode/vsce publish
+        run: npm run publish
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 

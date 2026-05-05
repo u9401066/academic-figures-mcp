@@ -1,7 +1,11 @@
 src/**
+out/test/**
+out/**/*.test.js
+out/**/*.test.js.map
 tsconfig.json
 .vscode/**
 eslint.config.mjs
+scripts/**
 node_modules/**/.bin/**
 node_modules/typescript/**
 node_modules/@types/**

@@ -2,7 +2,7 @@
   "name": "academic-figures-mcp",
   "displayName": "Academic Figures MCP",
   "description": "A workflow-first academic figure agent harness for multi-step planning, generation, and evaluation through MCP and VSX, with guided onboarding for non-engineers.",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "publisher": "u9401066",
   "license": "Apache-2.0",
   "icon": "resources/icon.png",
@@ -94,6 +94,21 @@
       {
         "command": "academicFiguresMcp.insertMcpSettings",
         "title": "Academic Figures: Insert MCP Settings",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.insertCodexSettings",
+        "title": "Academic Figures: Insert Codex MCP Settings",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.insertClineSettings",
+        "title": "Academic Figures: Insert Cline MCP Settings",
+        "category": "Academic Figures"
+      },
+      {
+        "command": "academicFiguresMcp.installAssistantAssets",
+        "title": "Academic Figures: Install Official Assistant Assets",
         "category": "Academic Figures"
       },
       {
@@ -245,6 +260,11 @@
           "type": "string",
           "default": "academic-figures-mcp",
           "description": "Package name used when launching through uvx in package mode."
+        },
+        "academicFiguresMcp.installCodexConfig": {
+          "type": "boolean",
+          "default": false,
+          "description": "Force-install the Academic Figures MCP server into Codex config.toml even if Codex has not created a config directory yet."
         }
       }
     },
@@ -347,14 +367,20 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "sync-assets": "node ./scripts/sync-assets.mjs",
+    "sync-assets:check": "node ./scripts/check-sync-assets.mjs",
+    "vscode:prepublish": "npm run sync-assets && npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "test": "npm run compile",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "test": "npm run test:unit",
+    "test:unit": "npm run compile && node --test out/test/*.test.js",
+    "test:package-contents": "node ./scripts/check-package-contents.mjs",
+    "test:ci": "npm run sync-assets:check && npm run lint && npm run test:unit && npm run test:package-contents",
+    "test:install-smoke": "npm run test:package-contents",
+    "package": "npm run sync-assets && vsce package",
+    "publish": "npm run sync-assets && vsce publish"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

@@ -3,6 +3,14 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
+import { syncAssistantAssets, type AssistantAssetInstallMode } from "./assistantAssets";
+import {
+  buildAcademicFiguresClineServerEntry,
+  getClineMcpSettingsPath,
+  installClineMcpServer,
+  isClineSettingsAvailable,
+} from "./clineConfig";
+import { buildAcademicFiguresCodexServerSpec, getCodexConfigPath, installCodexMcpServer } from "./codexConfig";
 import {
   AcademicFiguresMcpProvider,
   type AcademicFiguresRuntimeSpec,
@@ -328,6 +336,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const jobsProvider = new JobsProvider(artifactRoot);
   const mcpProvider = new AcademicFiguresMcpProvider(context, outputChannel);
   context.subscriptions.push({ dispose: () => mcpProvider.dispose() });
+  syncCodexConfiguration(context);
+  if (workspaceRoot) {
+    syncBundledAssistantAssets(context, workspaceRoot, "auto");
+  }
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider("academicFigures.presets", presetsProvider),
@@ -416,6 +428,12 @@ function registerCommands(
     fs.mkdirSync(vscodeDir, { recursive: true });
 
     const current = readJsonFile(settingsPath);
+    if (!current) {
+      vscode.window.showErrorMessage(
+        "Existing .vscode/mcp.json could not be parsed. Fix it before inserting Academic Figures MCP settings.",
+      );
+      return;
+    }
     const currentServers = toObjectRecord(current.servers) ?? {};
     const mergedServer = {
       ...(toObjectRecord(currentServers.academicFigures) ?? {}),
@@ -428,7 +446,10 @@ function registerCommands(
       ...current,
       servers: {
         ...nextServers,
-        "academic-figures": buildWorkspaceMcpServerDefinition(mergedServer),
+        "academic-figures": buildWorkspaceMcpServerDefinition(
+          mergedServer,
+          getCredentialSource() === ENV_FILE_SOURCE ? getEnvironmentFileSetting() : undefined,
+        ),
       },
     };
 
@@ -538,6 +559,9 @@ function registerCommands(
       { label: "$(plug) Configure Connection", description: "Key, env file, OpenRouter, Ollama" },
       { label: "$(file-code) Create Env File", description: "Generate an env template" },
       { label: "$(gear) Insert MCP Settings", description: ".vscode/mcp.json" },
+      { label: "$(terminal) Insert Codex Settings", description: "~/.codex/config.toml" },
+      { label: "$(tools) Insert Cline Settings", description: "cline_mcp_settings.json" },
+      { label: "$(symbol-folder) Install Assistant Assets", description: "Codex/Cline/Copilot harness" },
       { label: "$(sync) Reinstall Python Env", description: "Run uv sync --all-extras" },
       { label: "$(info) Show Status", description: "Extension status" },
       { label: "$(output) Show Output", description: "Output channel" },
@@ -554,6 +578,9 @@ function registerCommands(
       "$(plug) Configure Connection": "academicFiguresMcp.configureApiKey",
       "$(file-code) Create Env File": "academicFiguresMcp.createEnvironmentFile",
       "$(gear) Insert MCP Settings": "academicFiguresMcp.insertMcpSettings",
+      "$(terminal) Insert Codex Settings": "academicFiguresMcp.insertCodexSettings",
+      "$(tools) Insert Cline Settings": "academicFiguresMcp.insertClineSettings",
+      "$(symbol-folder) Install Assistant Assets": "academicFiguresMcp.installAssistantAssets",
       "$(sync) Reinstall Python Env": "academicFiguresMcp.reinstallPythonEnv",
       "$(info) Show Status": "academicFiguresMcp.showStatus",
       "$(output) Show Output": "academicFiguresMcp.showOutput",
@@ -577,8 +604,11 @@ function registerCommands(
 
     if (deps.workspaceRoot) {
       await vscode.commands.executeCommand("academicFiguresMcp.insertMcpSettings");
+      await vscode.commands.executeCommand("academicFiguresMcp.installAssistantAssets");
       log("Setup Wizard: MCP settings inserted.");
     }
+    await vscode.commands.executeCommand("academicFiguresMcp.insertCodexSettings");
+    await vscode.commands.executeCommand("academicFiguresMcp.insertClineSettings");
 
     vscode.window.showInformationMessage(
       `Academic Figures MCP setup complete with provider ${getCurrentImageProvider()} and source ${getCredentialSourceLabel()}. Try asking Copilot to generate a figure.`,
@@ -599,6 +629,149 @@ function registerCommands(
     terminal.sendText("uv sync --all-extras");
     vscode.window.showInformationMessage("Reinstalling Python environment via uv...");
   });
+
+  register("academicFiguresMcp.insertCodexSettings", async () => {
+    const updated = syncCodexConfiguration(context, true);
+    if (!updated) {
+      vscode.window.showInformationMessage(
+        `Codex settings already up to date or Codex is not initialized. Enable academicFiguresMcp.installCodexConfig to force writing ${getCodexConfigPath()}.`,
+      );
+    }
+  });
+
+  register("academicFiguresMcp.installAssistantAssets", async () => {
+    if (!deps.workspaceRoot) {
+      vscode.window.showErrorMessage("Open a workspace folder before installing assistant assets.");
+      return;
+    }
+    const summary = syncBundledAssistantAssets(context, deps.workspaceRoot, "manual");
+    if (summary.missingSources.length > 0) {
+      vscode.window.showWarningMessage(
+        `Assistant asset install finished with ${summary.missingSources.length} missing bundled source(s). Run sync-assets before packaging.`,
+      );
+      return;
+    }
+    vscode.window.showInformationMessage(
+      `Assistant assets ready: ${summary.installed} installed, ${summary.updated} updated, ${summary.preserved} preserved.`,
+    );
+  });
+
+  register("academicFiguresMcp.insertClineSettings", async () => {
+    const updated = syncClineConfiguration(context, true);
+    if (!updated) {
+      vscode.window.showInformationMessage(
+        "Cline settings already up to date or Cline is not initialized.",
+      );
+    }
+  });
+}
+
+function syncCodexConfiguration(context: vscode.ExtensionContext, notifyUser = false): boolean {
+  const config = vscode.workspace.getConfiguration("academicFiguresMcp");
+  const spec = buildAcademicFiguresCodexServerSpec({
+    env: buildCodexRuntimeEnvironment(),
+    packageName: config.get<string>("packageName", "academic-figures-mcp"),
+    version: getExtensionPackageVersion(context),
+  });
+  const updated = installCodexMcpServer(spec, {
+    force: config.get<boolean>("installCodexConfig", false),
+  });
+
+  if (updated) {
+    log(`Codex MCP config updated: ${getCodexConfigPath()}`);
+    if (notifyUser) {
+      vscode.window.showInformationMessage(
+        `Academic Figures MCP has been added to Codex at ${getCodexConfigPath()}. Restart Codex to use it.`,
+      );
+    }
+  }
+
+  return updated;
+}
+
+function buildCodexRuntimeEnvironment(): Record<string, string> {
+  const config = vscode.workspace.getConfiguration("academicFiguresMcp");
+  const provider = getCurrentImageProvider();
+  const env: Record<string, string> = {
+    AFM_IMAGE_PROVIDER: provider,
+  };
+
+  if (provider === OPENROUTER_PROVIDER) {
+    env.GEMINI_MODEL = config.get<string>("openRouterModel", DEFAULT_OPENROUTER_MODEL);
+    env.OPENROUTER_BASE_URL = config.get<string>("openRouterBaseUrl", DEFAULT_OPENROUTER_BASE_URL);
+    const referer = config.get<string>("openRouterReferer", DEFAULT_OPENROUTER_REFERER).trim();
+    const title = config.get<string>("openRouterTitle", DEFAULT_OPENROUTER_TITLE).trim();
+    if (referer) {
+      env.OPENROUTER_HTTP_REFERER = referer;
+    }
+    if (title) {
+      env.OPENROUTER_APP_TITLE = title;
+    }
+    return env;
+  }
+
+  if (provider === OPENAI_PROVIDER) {
+    env.OPENAI_IMAGE_MODEL = config.get<string>("openAiModel", DEFAULT_OPENAI_MODEL);
+    env.OPENAI_BASE_URL = config.get<string>("openAiBaseUrl", DEFAULT_OPENAI_BASE_URL);
+    env.OPENAI_VISION_MODEL = config.get<string>("openAiVisionModel", DEFAULT_OPENAI_VISION_MODEL);
+    env.OPENAI_IMAGE_SIZE = config.get<string>("openAiImageSize", DEFAULT_OPENAI_IMAGE_SIZE);
+    return env;
+  }
+
+  if (provider === OLLAMA_PROVIDER) {
+    env.OLLAMA_BASE_URL = config.get<string>("ollamaBaseUrl", DEFAULT_OLLAMA_BASE_URL);
+    env.OLLAMA_MODEL = config.get<string>("ollamaModel", DEFAULT_OLLAMA_MODEL);
+    return env;
+  }
+
+  env.GEMINI_MODEL = config.get<string>("googleModel", DEFAULT_GOOGLE_MODEL);
+  return env;
+}
+
+function syncBundledAssistantAssets(
+  context: vscode.ExtensionContext,
+  workspaceRoot: string,
+  mode: AssistantAssetInstallMode,
+): ReturnType<typeof syncAssistantAssets> {
+  const sourceRoot = path.join(context.extensionUri.fsPath, "resources", "repo-assets", "academic-figures");
+  const summary = syncAssistantAssets({ mode, sourceRoot, workspaceRoot });
+  if (summary.missingSources.length > 0) {
+    log(`Assistant asset sync missing sources: ${summary.missingSources.join(", ")}`);
+  } else if (summary.installed > 0 || summary.updated > 0 || summary.preserved > 0) {
+    log(
+      `Assistant asset sync: ${summary.installed} installed, ${summary.updated} updated, ${summary.preserved} preserved.`,
+    );
+  }
+  return summary;
+}
+
+function syncClineConfiguration(context: vscode.ExtensionContext, notifyUser = false): boolean {
+  const settingsPath = getClineMcpSettingsPath(context.globalStorageUri.fsPath);
+  if (!isClineSettingsAvailable(context.globalStorageUri.fsPath)) {
+    return false;
+  }
+
+  const config = vscode.workspace.getConfiguration("academicFiguresMcp");
+  const entry = buildAcademicFiguresClineServerEntry({
+    env: buildCodexRuntimeEnvironment(),
+    packageName: config.get<string>("packageName", "academic-figures-mcp"),
+    version: getExtensionPackageVersion(context),
+  });
+  const updated = installClineMcpServer(settingsPath, entry);
+  if (updated) {
+    log(`Cline MCP settings updated: ${settingsPath}`);
+    if (notifyUser) {
+      vscode.window.showInformationMessage(
+        `Academic Figures MCP has been added to Cline at ${settingsPath}. Restart Cline to use it.`,
+      );
+    }
+  }
+  return updated;
+}
+
+function getExtensionPackageVersion(context: vscode.ExtensionContext): string | undefined {
+  const packageJson = context.extension.packageJSON as { version?: unknown };
+  return typeof packageJson.version === "string" ? packageJson.version : undefined;
 }
 
 async function runPlanFigureCommand(deps: CommandDeps): Promise<void> {
@@ -986,7 +1159,7 @@ function getWorkspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
-function readJsonFile(filePath: string): Record<string, unknown> {
+function readJsonFile(filePath: string): Record<string, unknown> | undefined {
   if (!fs.existsSync(filePath)) {
     return {};
   }
@@ -994,7 +1167,7 @@ function readJsonFile(filePath: string): Record<string, unknown> {
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
   } catch {
-    return {};
+    return undefined;
   }
 }
 
@@ -1004,6 +1177,7 @@ function toObjectRecord(value: unknown): Record<string, unknown> | undefined {
 
 function buildWorkspaceMcpServerDefinition(
   existing: Record<string, unknown>,
+  configuredEnvFile?: string,
 ): Record<string, unknown> {
   const server: Record<string, unknown> = {
     type: "stdio",
@@ -1013,6 +1187,8 @@ function buildWorkspaceMcpServerDefinition(
 
   if (typeof existing.envFile === "string" && existing.envFile.trim()) {
     server.envFile = existing.envFile;
+  } else if (configuredEnvFile?.trim()) {
+    server.envFile = configuredEnvFile.trim();
   }
 
   const existingEnv = toObjectRecord(existing.env);
