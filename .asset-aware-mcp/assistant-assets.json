@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "files": {
+    "AGENTS.md": {
+      "sha256": "568b2169a3b1a864469a8b7d9720b4d935f919e8d8a6afdf3ec38e7b2f4bf3b7"
+    },
+    ".github/agents/asset-aware-document.agent.md": {
+      "sha256": "37851391b02b15a616a0c374ea5c8b1fb275f18f042c1d0dfc2a7d2e5f6d070c"
+    },
+    ".github/bylaws/ddd-architecture.md": {
+      "sha256": "9e916fa6d1cd7627d91deee221de528acaacc71227f3affd2898196bbce58687"
+    },
+    ".github/bylaws/git-workflow.md": {
+      "sha256": "31d95e70405cba589a13ec23b69bbab6cd271adab706efc35127f4b136f6ad94"
+    },
+    ".github/bylaws/memory-bank.md": {
+      "sha256": "ceab7cc367a7db8249bd918d1593fe46863cc2fdd4dbddb9b182af67b8a5b994"
+    },
+    ".github/bylaws/python-environment.md": {
+      "sha256": "780b27367017e4534acbfdaa664e94ec94100b55f339bccf7f0fa39587def2c0"
+    },
+    ".claude/skills/changelog-updater/SKILL.md": {
+      "sha256": "cf226caa2e85267f2233d2e9bc55f0fa284971caa391f7da38ed76ceb97e7da5"
+    },
+    ".claude/skills/code-refactor/SKILL.md": {
+      "sha256": "fe7f24f62fbc22e080df4f2ee389502ee35d7baa2ed228428ec17acd540ba031"
+    },
+    ".claude/skills/code-reviewer/SKILL.md": {
+      "sha256": "f25036098dd5cec4cde6e5ea19b0f1eba7aded390d474c2a6c6c016c694a14bd"
+    },
+    ".claude/skills/ddd-architect/SKILL.md": {
+      "sha256": "6f75c577edadf2ff1ae9198b7a0f72976ce9ad5a45b3280f2ab281743f0e8468"
+    },
+    ".claude/skills/git-doc-updater/SKILL.md": {
+      "sha256": "1fa926a339e1c0fd6d77775ff3218f05b2842bd2442e7773321b27efeeb48c25"
+    },
+    ".claude/skills/git-precommit/SKILL.md": {
+      "sha256": "461fd22ef4ecef2a05f20988974d296f0688966aa1a6ca682bd65a4d4f451392"
+    },
+    ".claude/skills/memory-checkpoint/SKILL.md": {
+      "sha256": "d96c8590d33ecf3e971e67a781bbfa993e615bcd8bc79172d52ce9ea4ab72097"
+    },
+    ".claude/skills/memory-updater/SKILL.md": {
+      "sha256": "249f84828832e3451cc9e3acc511af20ccf7912682bb61af3813b7ed7426ff0d"
+    },
+    ".claude/skills/pdf-asset-extractor/SKILL.md": {
+      "sha256": "a8fa62970f9b91640486f9c1f25e5bc986f4c497fa9da823e8b97b2273a22e16"
+    },
+    ".claude/skills/pipeline-persistence/SKILL.md": {
+      "sha256": "ab3e985ca801d5ead92d74c357bcc67521ec7ed00be2832296f24390eab08d44"
+    },
+    ".claude/skills/project-init/SKILL.md": {
+      "sha256": "1b2c195476cfd768b41793e31a0f314c3a3064ff1e09d25c54bf43f786ad0dfb"
+    },
+    ".claude/skills/pubmed-export-citations/SKILL.md": {
+      "sha256": "0c6c2e80c3025caf0bde5761a7ab0f9ae8b74af21d73835c36bea0ac40267d30"
+    },
+    ".claude/skills/pubmed-fulltext-access/SKILL.md": {
+      "sha256": "d3724eec0353e858aae88ae3ca249e2b00654ba98f053ddaadad21f8a35fd1cc"
+    },
+    ".claude/skills/pubmed-gene-drug-research/SKILL.md": {
+      "sha256": "dd3ea3440078afcc70e1165e7904d53795cc334d95d873c2166256474b45d1c5"
+    },
+    ".claude/skills/pubmed-mcp-tools-reference/SKILL.md": {
+      "sha256": "971b665f1399e4504e548e5ccf63757caf6074fd66739e6f7ebe780963a09db9"
+    },
+    ".claude/skills/pubmed-multi-source-search/SKILL.md": {
+      "sha256": "8d47f294fb42f6a9d5f4d70e68746b63a84b802ef76396a3f1163a1c056ccff7"
+    },
+    ".claude/skills/pubmed-paper-exploration/SKILL.md": {
+      "sha256": "cac9d98bf6235f87a10873e9ba461724a2e38d6ab002a9707668047bcc32c950"
+    },
+    ".claude/skills/pubmed-pico-search/SKILL.md": {
+      "sha256": "ede15df3a8f87ea1b9851143ec55a8d23baf8f8502a123baf033ebe926f653d8"
+    },
+    ".claude/skills/pubmed-quick-search/SKILL.md": {
+      "sha256": "f7d734f738d9360577c2218b839ba50d71e7aca1cb8dd1bc6a13079946d52e47"
+    },
+    ".claude/skills/pubmed-systematic-search/SKILL.md": {
+      "sha256": "7cdd71a5794a37dd25ec2021b967ad7729e24504b98f771cba160b28b6d10d56"
+    },
+    ".claude/skills/readme-i18n/SKILL.md": {
+      "sha256": "cbe94d77c5f2637226bfe45d74fe4387d5137d08e9f9f3e147fc8d194d35b7c2"
+    },
+    ".claude/skills/readme-updater/SKILL.md": {
+      "sha256": "7efacb4649dbd17f8aeabde7c3957967b26d5ce41a748aeb1ac7fb14a5f55123"
+    },
+    ".claude/skills/roadmap-updater/SKILL.md": {
+      "sha256": "b11972b7531f7447b92105c06af3a1f728635e0c1b81ec5e5a7c2942485879e9"
+    },
+    ".claude/skills/test-generator/SKILL.md": {
+      "sha256": "519da8c1b00316f148a64bd6f6561eb1cbab4e09738cab88b11cdaba2885fafc"
+    },
+    ".cline/skills/asset-aware-mcp-harness/SKILL.md": {
+      "sha256": "e5af27a7740a714e99b4ce22f1c5e0ac849f9558d1741b0f5290f607f8be83e6"
+    },
+    ".codex/skills/asset-aware-mcp-harness/SKILL.md": {
+      "sha256": "b3985fbc76586d89786fe9b9b6e51d8266a36dfa99dbd0af7c0b2f8175e93b35"
+    },
+    ".clinerules/00-project.md": {
+      "sha256": "cf8a6ae712176277699e0a7fc17ffe5a54a02f080ffaa7b046f7b7ca0c10cee8"
+    },
+    ".clinerules/10-python.md": {
+      "sha256": "f144621acc3520b64d6cbb7b27f91a968a012019318f26f230d6eab03dcada7f"
+    },
+    ".clinerules/20-vscode-extension.md": {
+      "sha256": "518ffc6caf98ab5c242e1ed192650e07ed5becab3f02a5b3c25e72a67e2445d0"
+    },
+    ".clinerules/30-citation-ready.md": {
+      "sha256": "a8115f1c63b26219732c86195cd1ec61b631e645e6bc640270d36ece2c1ae5ec"
+    },
+    ".clinerules/40-release.md": {
+      "sha256": "379abe7f693174cf5207dcc6aa6cbdced060e84ea641c80ba368bc1ee9cfe14d"
+    },
+    ".clinerules/workflows/full-check.md": {
+      "sha256": "bcc8bcd757aadba624b8a9ddcdc9fae15f1de1ef44ed9284af6e51e29fd7209a"
+    },
+    ".clinerules/workflows/mcp-setup.md": {
+      "sha256": "a9a6a9dfd31b33ff42b3f705b2c74787f7c62abbb59b0666b0c0d3615266ecaf"
+    },
+    ".clinerules/workflows/release-publish.md": {
+      "sha256": "4696c175a10f8835caaed4b8a1b96bd3da832bf58d4bacdf447b0803af06f23c"
+    },
+    ".clinerules/workflows/skills-audit.md": {
+      "sha256": "992c1137b9d37d2309491a83cb6ef748b570c771d14d66486fd6c0416c9473e2"
+    }
+  }
+}

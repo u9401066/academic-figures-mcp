@@ -1,4 +1,4 @@
-{
+﻿{
   "servers": {
     "academic-figures": {
       "type": "stdio",
@@ -12,6 +12,25 @@
         "src.server"
       ],
       "envFile": "${workspaceFolder}/env"
+    },
+    "asset-aware-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--python",
+        "3.11",
+        "--from",
+        "asset-aware-mcp==0.6.16",
+        "asset-aware-mcp"
+      ],
+      "env": {
+        "LLM_BACKEND": "ollama",
+        "OLLAMA_HOST": "http://localhost:11434",
+        "OLLAMA_MODEL": "qwen2.5:7b",
+        "OLLAMA_EMBEDDING_MODEL": "nomic-embed-text",
+        "ENABLE_LIGHTRAG": "true",
+        "DATA_DIR": "d:\\workspace260410\\academic-figures-mcp\\data"
+      }
     }
   }
 }
