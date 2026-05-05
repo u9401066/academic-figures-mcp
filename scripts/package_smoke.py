@@ -19,15 +19,46 @@ SMOKE_METADATA = {
 }
 
 
-def _run(command: list[str], cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command,
-        cwd=cwd,
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+def _run(
+    command: list[str],
+    cwd: Path,
+    env: dict[str, str],
+    *,
+    timeout_seconds: int = 180,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except FileNotFoundError as exc:
+        return subprocess.CompletedProcess(command, 127, "", str(exc))
+    except subprocess.TimeoutExpired as exc:
+        stderr = _coerce_text(exc.stderr)
+        if stderr:
+            stderr = f"{stderr}\n"
+        stderr = f"{stderr}Timed out after {timeout_seconds} seconds."
+        return subprocess.CompletedProcess(
+            command,
+            124,
+            _coerce_text(exc.stdout),
+            stderr,
+        )
+
+
+def _coerce_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def _fail(stage: str, result: subprocess.CompletedProcess[str] | None, message: str) -> int:
@@ -42,6 +73,30 @@ def _fail(stage: str, result: subprocess.CompletedProcess[str] | None, message: 
         payload["stderr"] = result.stderr[-2000:]
     print(json.dumps(payload, ensure_ascii=False))
     return 1
+
+
+def _latest_wheel(dist_dir: Path) -> Path | None:
+    wheels = sorted(
+        dist_dir.glob("academic_figures_mcp-*.whl"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return wheels[0] if wheels else None
+
+
+def _venv_python(venv_path: Path) -> Path:
+    if os.name == "nt":
+        return venv_path / "Scripts" / "python.exe"
+    return venv_path / "bin" / "python"
+
+
+def _console_script(venv_path: Path, name: str) -> Path:
+    if os.name == "nt":
+        exe = venv_path / "Scripts" / f"{name}.exe"
+        if exe.exists():
+            return exe
+        return venv_path / "Scripts" / name
+    return venv_path / "bin" / name
 
 
 def main() -> int:
@@ -63,32 +118,54 @@ def main() -> int:
             }
         )
 
-        help_result = _run(
-            ["uvx", "--no-cache", "--from", ".", "afm-run", "--help"],
-            repo_root,
+        build_result = _run(["uv", "build", "--wheel"], repo_root, env, timeout_seconds=240)
+        if build_result.returncode != 0:
+            return _fail("build", build_result, "wheel build failed")
+
+        wheel_path = _latest_wheel(repo_root / "dist")
+        if wheel_path is None:
+            return _fail("build", build_result, "wheel build did not produce a wheel artifact")
+
+        venv_path = tmp_path / ".venv"
+        venv_result = _run(["uv", "venv", str(venv_path)], tmp_path, env)
+        if venv_result.returncode != 0:
+            return _fail("venv", venv_result, "temporary package smoke venv creation failed")
+
+        python_path = _venv_python(venv_path)
+        install_result = _run(
+            ["uv", "pip", "install", "--python", str(python_path), str(wheel_path)],
+            tmp_path,
             env,
+            timeout_seconds=240,
+        )
+        if install_result.returncode != 0:
+            return _fail("install", install_result, "wheel install into smoke venv failed")
+
+        afm_run = _console_script(venv_path, "afm-run")
+        help_result = _run(
+            [str(afm_run), "--help"],
+            tmp_path,
+            env,
+            timeout_seconds=60,
         )
         if help_result.returncode != 0:
-            return _fail("help", help_result, "uvx package entrypoint failed")
+            return _fail("help", help_result, "wheel package entrypoint failed")
 
         if "usage: afm-run" not in help_result.stdout:
             return _fail("help", help_result, "afm-run help output missing expected usage text")
 
         plan_result = _run(
             [
-                "uvx",
-                "--no-cache",
-                "--from",
-                ".",
-                "afm-run",
+                str(afm_run),
                 "plan",
                 "--pmid",
                 SMOKE_PMID,
                 "--target-journal",
                 "Nature",
             ],
-            repo_root,
+            tmp_path,
             env,
+            timeout_seconds=120,
         )
         if plan_result.returncode != 0:
             return _fail("plan", plan_result, "package-mode planning smoke failed")

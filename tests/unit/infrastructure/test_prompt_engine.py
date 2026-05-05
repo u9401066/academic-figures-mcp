@@ -83,6 +83,48 @@ def test_prompt_engine_resolves_installed_data_templates(
     assert "Test Journal" in prompt
 
 
+def test_prompt_engine_resolves_templates_from_wheel_install_root(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fake_package_file = (
+        tmp_path
+        / "uv-archive"
+        / "Lib"
+        / "site-packages"
+        / "src"
+        / "infrastructure"
+        / "prompt_engine.py"
+    )
+    fake_package_file.parent.mkdir(parents=True)
+    fake_package_file.write_text("", encoding="utf-8")
+    install_templates = tmp_path / "uv-archive" / "templates"
+    install_templates.mkdir(parents=True)
+    (install_templates / "journal-profiles.yaml").write_text(
+        "profiles:\n"
+        "  - id: wheel_journal\n"
+        "    display_name: Wheel Journal\n"
+        "    aliases: [Wheel Journal]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(prompt_engine_module, "__file__", str(fake_package_file))
+    monkeypatch.setattr(
+        "src.infrastructure.prompt_engine.sysconfig.get_path",
+        lambda name: str(tmp_path / "missing-data") if name == "data" else "",
+    )
+
+    engine = PromptEngine()
+    prompt, profile = engine.inject_journal_requirements(
+        "base prompt",
+        target_journal="Wheel Journal",
+    )
+
+    assert engine.template_dir == install_templates
+    assert profile is not None
+    assert profile["id"] == "wheel_journal"
+    assert "Wheel Journal" in prompt
+
+
 def test_prompt_engine_builds_cjk_text_block_for_zh_tw() -> None:
     block = PromptEngine._build_cjk_text_block(
         language="zh-TW",

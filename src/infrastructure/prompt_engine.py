@@ -193,10 +193,18 @@ class PromptEngine(PromptBuilder):
 
     @staticmethod
     def _resolve_default_template_dir() -> Path:
-        source_tree_dir = Path(__file__).resolve().parents[2] / "templates"
+        package_file = Path(__file__).resolve()
+        source_tree_dir = package_file.parents[2] / "templates"
         installed_data_dir = Path(sysconfig.get_path("data")) / "templates"
 
-        for candidate in (source_tree_dir, installed_data_dir):
+        candidates = [source_tree_dir, installed_data_dir]
+        candidates.extend(parent / "templates" for parent in package_file.parents)
+
+        seen: set[Path] = set()
+        for candidate in candidates:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
             if (candidate / "prompt-templates.md").exists() or (
                 candidate / "journal-profiles.yaml"
             ).exists():
